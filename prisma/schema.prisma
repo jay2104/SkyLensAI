@@ -14,16 +14,63 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
-model Post {
-    id        Int      @id @default(autoincrement())
-    name      String
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+// Custom ENUM types for status fields to ensure data consistency
+enum SubscriptionTier {
+    FREE
+    PRO
+    ENTERPRISE
+}
 
-    createdBy   User   @relation(fields: [createdById], references: [id])
-    createdById String
+enum UploadStatus {
+    PENDING
+    UPLOADED
+    PROCESSED
+    ERROR
+}
 
-    @@index([name])
+enum AnalysisStatus {
+    PENDING
+    COMPLETE
+    ERROR
+}
+
+enum LogFileType {
+    BIN
+    LOG
+    TLOG
+    ULG
+}
+
+// SkyLensAI Data Models
+model LogFile {
+    id           String       @id @default(cuid())
+    fileName     String
+    fileType     LogFileType
+    uploadStatus UploadStatus @default(PENDING)
+    fileSize     Int
+    userId       String
+    createdAt    DateTime     @default(now())
+
+    // Relationships
+    user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+    analysisResult AnalysisResult?
+
+    @@index([userId])
+}
+
+model AnalysisResult {
+    id               String         @id @default(cuid())
+    status           AnalysisStatus @default(PENDING)
+    healthScore      Int?
+    summary          String?
+    detailedFindings Json?
+    logFileId        String         @unique
+    createdAt        DateTime       @default(now())
+
+    // Relationships
+    logFile LogFile @relation(fields: [logFileId], references: [id], onDelete: Cascade)
+
+    @@index([logFileId])
 }
 
 // Necessary for Next auth
@@ -55,14 +102,22 @@ model Session {
 }
 
 model User {
-    id            String    @id @default(cuid())
-    name          String?
-    email         String?   @unique
-    emailVerified DateTime?
-    image         String?
-    accounts      Account[]
-    sessions      Session[]
-    posts         Post[]
+    id                         String           @id @default(cuid())
+    name                       String?
+    email                      String?          @unique
+    emailVerified              DateTime?
+    image                      String?
+    subscriptionTier           SubscriptionTier @default(FREE)
+    paymentProviderCustomerId  String?
+    createdAt                  DateTime         @default(now())
+    updatedAt                  DateTime         @updatedAt
+
+    // NextAuth relationships
+    accounts Account[]
+    sessions Session[]
+    
+    // SkyLensAI relationships
+    logFiles LogFile[]
 }
 
 model VerificationToken {
