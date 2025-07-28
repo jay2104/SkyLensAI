@@ -65,12 +65,15 @@ model AnalysisResult {
     summary          String?
     detailedFindings Json?
     logFileId        String         @unique
+    userId           String
     createdAt        DateTime       @default(now())
 
     // Relationships
     logFile LogFile @relation(fields: [logFileId], references: [id], onDelete: Cascade)
+    user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
     @@index([logFileId])
+    @@index([userId])
 }
 
 // Necessary for Next auth
@@ -118,6 +121,7 @@ model User {
     
     // SkyLensAI relationships
     logFiles LogFile[]
+    analysisResults AnalysisResult[]
 }
 
 model VerificationToken {
