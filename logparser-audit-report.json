@@ -1,0 +1,114 @@
+{
+  "timestamp": "2025-08-01T08:07:50.561Z",
+  "crisis": "Story 1.1 LogParser Validation",
+  "fileAnalysis": [
+    {
+      "file": "sample-basic-flight.bin",
+      "type": "BIN",
+      "size": 5644288,
+      "status": "ANALYZED",
+      "realData": true,
+      "validHeaders": 113,
+      "formatMessages": 113,
+      "dataMessages": 0,
+      "totalMessages": 113,
+      "hasArduPilotSignatures": true
+    },
+    {
+      "file": "sample-complex-flight.bin",
+      "type": "BIN",
+      "size": 22345810,
+      "status": "ANALYZED",
+      "realData": true,
+      "validHeaders": 113,
+      "formatMessages": 113,
+      "dataMessages": 0,
+      "totalMessages": 113,
+      "hasArduPilotSignatures": true
+    },
+    {
+      "file": "sample-performance-test.bin",
+      "type": "BIN",
+      "size": 389120,
+      "status": "ANALYZED",
+      "realData": true,
+      "validHeaders": 113,
+      "formatMessages": 113,
+      "dataMessages": 0,
+      "totalMessages": 113,
+      "hasArduPilotSignatures": true
+    },
+    {
+      "file": "sample-standard-flight.bin",
+      "type": "BIN",
+      "size": 72158672,
+      "status": "ANALYZED",
+      "realData": true,
+      "validHeaders": 113,
+      "formatMessages": 113,
+      "dataMessages": 0,
+      "totalMessages": 113,
+      "hasArduPilotSignatures": true
+    },
+    {
+      "file": "sample-ulg-format.ulg",
+      "type": "ULG",
+      "size": 7706363,
+      "status": "ANALYZED",
+      "realData": true,
+      "hasUlgHeader": true,
+      "hasPx4Signatures": false,
+      "magic": "ULog\u0001\u00125\u0001"
+    }
+  ],
+  "parserAnalysis": {
+    "suspiciousPatterns": [
+      {
+        "pattern": "generateMockFlightData",
+        "matches": 4
+      },
+      {
+        "pattern": "mock data",
+        "matches": 4
+      },
+      {
+        "pattern": "fallback.*mock",
+        "matches": 1
+      },
+      {
+        "pattern": "sample.*data",
+        "matches": 3
+      }
+    ],
+    "realParsingPatterns": [
+      {
+        "pattern": "parseBinMessages",
+        "matches": 2
+      },
+      {
+        "pattern": "parseDataMessage",
+        "matches": 2
+      },
+      {
+        "pattern": "parseFmtMessage",
+        "matches": 2
+      },
+      {
+        "pattern": "buffer\\.read",
+        "matches": 9
+      },
+      {
+        "pattern": "extractFlightDataFromMessages",
+        "matches": 4
+      }
+    ],
+    "hasRealParsing": true,
+    "hasSuspiciousFallbacks": true
+  },
+  "conclusion": {
+    "hasRealFiles": true,
+    "hasRealParsing": true,
+    "hasMockFallbacks": true,
+    "riskLevel": "MEDIUM"
+  }
+}

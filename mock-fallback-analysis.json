@@ -1,0 +1,17 @@
+{
+  "timestamp": "2025-08-01T08:12:02.860Z",
+  "testType": "Mock Fallback Analysis",
+  "findings": {
+    "hasRealBinParsing": true,
+    "hasRealUlgParsing": false,
+    "hasMockFallbacks": true,
+    "hasSophisticatedMocks": true,
+    "riskLevel": "CRITICAL"
+  },
+  "recommendations": [
+    "Runtime testing in Next.js environment required",
+    "Add debug logging to track execution paths",
+    "Compare results with known real flight data",
+    "Test fallback behavior with corrupted files"
+  ]
+}
