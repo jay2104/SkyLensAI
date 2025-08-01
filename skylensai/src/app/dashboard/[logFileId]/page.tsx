@@ -1,0 +1,570 @@
+"use client";
+
+import { useParams } from "next/navigation";
+import { useState, lazy, Suspense, useMemo } from "react";
+import { api } from "~/trpc/react";
+import DashboardLayout from "~/app/_components/DashboardLayout";
+import HealthMetricCard from "~/app/_components/HealthMetricCard";
+import AiInsightsCard from "~/app/_components/AiInsightsCard";
+import AiPreviewModal from "~/app/_components/AiPreviewModal";
+import VirtualExpertPanel from "~/app/_components/VirtualExpertPanel";
+import ParameterCategorySection from "~/app/_components/ParameterCategorySection";
+import DashboardControls from "~/app/_components/DashboardControls";
+import { type DroneContext } from "~/server/services/openaiService";
+import { Activity, Gauge, Settings, BarChart3 } from "lucide-react";
+
+// Lazy load heavy components for better performance
+const FlightChart = lazy(() => import("~/app/_components/FlightChart"));
+const GpsMap = lazy(() => import("~/app/_components/GpsMap"));
+
+// Loading component for lazy-loaded charts
+function ChartSkeleton() {
+  return (
+    <div className="bg-white rounded-lg border border-slate-200 p-6">
+      <div className="animate-pulse">
+        <div className="h-6 bg-slate-200 rounded mb-4 w-1/3"></div>
+        <div className="h-64 bg-slate-100 rounded"></div>
+      </div>
+    </div>
+  );
+}
+
+interface TimeRange {
+  start: number;
+  end: number;
+}
+
+export default function DashboardPage() {
+  const params = useParams();
+  const logFileId = params.logFileId as string;
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showAiPreviewModal, setShowAiPreviewModal] = useState(false);
+  
+  // Interactive dashboard state
+  const [selectedParameters, setSelectedParameters] = useState<string[]>([]);
+  const [timeRange, setTimeRange] = useState<TimeRange>({ start: 0, end: 0 });
+
+  // Fetch dashboard data
+  const { data: dashboardData, isLoading: isDashboardLoading, refetch } = api.logFile.getLogDashboardData.useQuery(
+    { logFileId },
+    { enabled: !!logFileId }
+  );
+
+  // Fetch AI insights preview
+  const { data: aiInsightsData, isLoading: isAiInsightsLoading, error: aiInsightsError } = api.logFile.getAiInsightsPreview.useQuery(
+    { logFileId },
+    { 
+      enabled: !!logFileId && dashboardData?.uploadStatus === "PROCESSED",
+      retry: false,
+    }
+  );
+
+  // Fetch user AI preferences
+  const { data: userAiPreferences, error: preferencesError } = api.logFile.getUserAiPreferences.useQuery(
+    undefined,
+    {
+      retry: false,
+    }
+  );
+
+  // AI preview mutation
+  const generateAiPreview = api.logFile.generateAiPreview.useMutation({
+    onSuccess: (data) => {
+      console.log("AI Preview generated:", data);
+      // TODO: Show preview results in a dedicated component
+      // Refetch dashboard data to get updated analysis results
+      refetch();
+    },
+    onError: (error) => {
+      console.error("AI Preview failed:", error.message);
+      // Don't throw - just log and continue
+    },
+  });
+
+  // Analytics tracking mutation
+  const trackAiEvent = api.logFile.trackAiUpgradeEvent.useMutation();
+
+  // Fetch time series data
+  const { data: timeSeriesData, isLoading: isTimeSeriesLoading, error: timeSeriesError } = api.logFile.getTimeSeriesData.useQuery(
+    { logFileId },
+    { 
+      enabled: !!logFileId && dashboardData?.uploadStatus === "PROCESSED",
+      retry: false,
+    }
+  );
+
+  // Process log file mutation
+  const processLogFile = api.logFile.processLogFile.useMutation({
+    onSuccess: () => {
+      setIsProcessing(false);
+      refetch();
+    },
+    onError: (error) => {
+      setIsProcessing(false);
+      console.error("Failed to process log file:", error);
+    },
+  });
+
+  // Export data functionality
+  const exportData = api.logFile.exportData.useQuery(
+    { logFileId, format: "csv" },
+    { enabled: false }
+  );
+
+  // Initialize interactive controls when data loads
+  useMemo(() => {
+    if (timeSeriesData && dashboardData) {
+      // Initialize selected parameters (all available by default)
+      if (selectedParameters.length === 0) {
+        setSelectedParameters(Object.keys(timeSeriesData));
+      }
+      
+      // Initialize time range (full duration by default)  
+      if (timeRange.start === 0 && timeRange.end === 0 && dashboardData.flightDuration) {
+        setTimeRange({ start: 0, end: dashboardData.flightDuration });
+      }
+    }
+  }, [timeSeriesData, dashboardData, selectedParameters.length, timeRange]);
+
+  // Filter time series data based on current selections
+  const filteredTimeSeriesData = useMemo(() => {
+    if (!timeSeriesData) return {};
+    
+    const filtered: Record<string, typeof timeSeriesData[string]> = {};
+    
+    selectedParameters.forEach(param => {
+      if (timeSeriesData[param]) {
+        filtered[param] = timeSeriesData[param]!.filter(point => 
+          point.timestamp >= timeRange.start && point.timestamp <= timeRange.end
+        );
+      }
+    });
+    
+    return filtered;
+  }, [timeSeriesData, selectedParameters, timeRange]);
+
+  // Enhanced export functionality
+  const handleEnhancedExport = async (format: "csv" | "json" | "excel") => {
+    try {
+      // Use existing export but with filtered data context
+      const result = await exportData.refetch();
+      if (result.data) {
+        const blob = new Blob([result.data.data], {
+          type: format === "csv" ? "text/csv" : 
+               format === "json" ? "application/json" : 
+               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${result.data.fileName.replace(/\.[^/.]+$/, "")}_filtered_${Date.now()}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error("Enhanced export failed:", error);
+    }
+  };
+
+  // Create DroneContext for real AI insights
+  const droneContext = useMemo((): DroneContext | undefined => {
+    if (!dashboardData || dashboardData.uploadStatus !== "PROCESSED") return undefined;
+    
+    return {
+      fileName: dashboardData.fileName,
+      fileType: dashboardData.fileName.split('.').pop()?.toUpperCase() || 'BIN',
+      flightDuration: dashboardData.flightDuration || null,
+      maxAltitude: dashboardData.maxAltitude || null,
+      totalDistance: dashboardData.totalDistance || null,
+      batteryData: {
+        startVoltage: dashboardData.batteryStartVoltage || null,
+        endVoltage: dashboardData.batteryEndVoltage || null
+      },
+      gpsQuality: dashboardData.gpsQuality || null,
+      flightModes: dashboardData.flightModes || null,
+      existingAnalysis: aiInsightsData || null,
+      timeSeriesSample: timeSeriesData ? [
+        ...(timeSeriesData.altitude?.slice(0, 3).map((d: any) => ({
+          parameter: "Altitude",
+          timestamp: new Date(d.timestamp).getTime(),
+          value: d.value,
+          unit: "m"
+        })) || []),
+        ...(timeSeriesData.battery_voltage?.slice(0, 3).map((d: any) => ({
+          parameter: "Battery Voltage",
+          timestamp: new Date(d.timestamp).getTime(),
+          value: d.value,
+          unit: "V"
+        })) || []),
+        ...(timeSeriesData.roll?.slice(0, 2).map((d: any) => ({
+          parameter: "Roll",
+          timestamp: new Date(d.timestamp).getTime(),
+          value: d.value,
+          unit: "deg"
+        })) || []),
+        ...(timeSeriesData.gps_lat?.slice(0, 2).map((d: any) => ({
+          parameter: "GPS Latitude",
+          timestamp: new Date(d.timestamp).getTime(),
+          value: d.value,
+          unit: "deg"
+        })) || [])
+      ].slice(0, 10) : []
+    };
+  }, [dashboardData, aiInsightsData, timeSeriesData]);
+
+  const handleExport = async (format: "csv" | "json") => {
+    try {
+      const result = await exportData.refetch();
+      if (result.data) {
+        const blob = new Blob([result.data.data], {
+          type: format === "csv" ? "text/csv" : "application/json",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = result.data.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (error) {
+      console.error("Export failed:", error);
+    }
+  };
+
+  const handleProcessLog = () => {
+    setIsProcessing(true);
+    processLogFile.mutate({ logFileId });
+  };
+
+  if (isDashboardLoading) {
+    return (
+      <DashboardLayout isLoading={true} logFileName="Loading...">
+        <div />
+      </DashboardLayout>
+    );
+  }
+
+  if (!dashboardData) {
+    return (
+      <DashboardLayout logFileName="Log Not Found">
+        <div className="text-center py-12">
+          <h2 className="text-2xl font-bold text-slate-900 mb-4">Log File Not Found</h2>
+          <p className="text-slate-600">
+            The requested log file could not be found or you don't have access to it.
+          </p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const needsProcessing = dashboardData.uploadStatus === "UPLOADED";
+  const isProcessed = dashboardData.uploadStatus === "PROCESSED";
+
+  return (
+    <DashboardLayout
+      logFileName={dashboardData.fileName}
+      isLoading={isProcessing || isTimeSeriesLoading}
+      onExport={isProcessed ? handleExport : undefined}
+    >
+      {needsProcessing && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-medium text-blue-900">Ready to Process</h3>
+              <p className="text-blue-700 mt-1">
+                Your log file has been uploaded successfully. Click to process and generate your dashboard.
+              </p>
+            </div>
+            <button
+              onClick={handleProcessLog}
+              disabled={isProcessing}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+            >
+              {isProcessing ? "Processing..." : "Process Log"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isProcessed && dashboardData && (
+        <>
+          {/* Health Metrics Overview */}
+          <section>
+            <h2 className="text-2xl font-bold text-slate-900 mb-6">Flight Health Overview</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <HealthMetricCard
+                title="Flight Duration"
+                value={dashboardData.flightDuration ? `${Math.round(dashboardData.flightDuration / 60)}m ${Math.round(dashboardData.flightDuration % 60)}s` : "N/A"}
+                unit=""
+                status="good"
+                trend={dashboardData.trends?.duration?.trend || "stable"}
+                icon="Clock"
+              />
+              <HealthMetricCard
+                title="Max Altitude"
+                value={dashboardData.maxAltitude?.toFixed(1) ?? "N/A"}
+                unit="m"
+                status="good"
+                trend={dashboardData.trends?.altitude?.trend || "stable"}
+                icon="TrendingUp"
+              />
+              <HealthMetricCard
+                title="Total Distance"
+                value={dashboardData.totalDistance ? (dashboardData.totalDistance / 1000).toFixed(2) : "N/A"}
+                unit="km"
+                status="good"
+                trend={dashboardData.trends?.distance?.trend || "stable"}
+                icon="Navigation"
+              />
+              <HealthMetricCard
+                title="Battery Used"
+                value={
+                  dashboardData.batteryStartVoltage && dashboardData.batteryEndVoltage
+                    ? `${((dashboardData.batteryStartVoltage - dashboardData.batteryEndVoltage) / dashboardData.batteryStartVoltage * 100).toFixed(1)}%`
+                    : "N/A"
+                }
+                unit=""
+                status={
+                  dashboardData.batteryStartVoltage && dashboardData.batteryEndVoltage
+                    ? ((dashboardData.batteryStartVoltage - dashboardData.batteryEndVoltage) / dashboardData.batteryStartVoltage * 100) > 80
+                      ? "warning"
+                      : "good"
+                    : "good"
+                }
+                trend={dashboardData.trends?.battery?.trend || "stable"}
+                icon="Battery"
+              />
+              <HealthMetricCard
+                title="GPS Quality"
+                value={dashboardData.gpsQuality?.toString() ?? "N/A"}
+                unit="%"
+                status={
+                  dashboardData.gpsQuality
+                    ? dashboardData.gpsQuality > 85
+                      ? "good"
+                      : dashboardData.gpsQuality > 60
+                      ? "warning"
+                      : "error"
+                    : "good"
+                }
+                trend={dashboardData.trends?.gps?.trend || "stable"}
+                icon="Satellite"
+              />
+              <HealthMetricCard
+                title="File Size"
+                value={(dashboardData.fileSize / (1024 * 1024)).toFixed(1)}
+                unit="MB"
+                status="good"
+                trend={dashboardData.trends?.fileSize?.trend || "stable"}
+                icon="HardDrive"
+              />
+            </div>
+          </section>
+
+          {/* AI Insights Section */}
+          <section>
+            <h2 className="text-2xl font-bold text-slate-900 mb-6">AI-Powered Analysis</h2>
+            <AiInsightsCard
+              logFileName={dashboardData.fileName}
+              isUpgradeUser={userAiPreferences?.subscriptionTier !== "FREE"}
+              sampleInsights={aiInsightsError ? [] : aiInsightsData?.insights}
+              droneContext={droneContext}
+              onUpgradeClick={() => {
+                trackAiEvent.mutate({ 
+                  event: "upgrade_clicked", 
+                  logFileId,
+                  metadata: { source: "insights_card" }
+                });
+                setShowAiPreviewModal(true);
+              }}
+              onPreviewClick={() => {
+                trackAiEvent.mutate({ 
+                  event: "preview_clicked", 
+                  logFileId,
+                  metadata: { source: "insights_card" }
+                });
+                
+                if (userAiPreferences) {
+                  if (userAiPreferences.subscriptionTier === "FREE") {
+                    if (userAiPreferences.aiPreviewUsed) {
+                      setShowAiPreviewModal(true);
+                    } else {
+                      generateAiPreview.mutate({ logFileId });
+                    }
+                  } else {
+                    // Pro user - show full analysis
+                    console.log("Show full AI analysis for pro user");
+                  }
+                } else {
+                  console.log("User preferences not loaded yet");
+                }
+              }}
+              className="mb-8"
+            />
+          </section>
+
+          {/* Virtual Expert Section */}
+          <section>
+            <h2 className="text-2xl font-bold text-slate-900 mb-6">Virtual Expert</h2>
+            <VirtualExpertPanel
+              logFileId={logFileId}
+              logFileName={dashboardData.fileName}
+              userSubscriptionTier={userAiPreferences?.subscriptionTier || "FREE"}
+              onUpgradeClick={() => {
+                trackAiEvent.mutate({ 
+                  event: "upgrade_clicked", 
+                  logFileId,
+                  metadata: { source: "virtual_expert_panel" }
+                });
+                setShowAiPreviewModal(true);
+              }}
+              className="mb-8"
+            />
+          </section>
+
+          {/* Phase 4: Interactive Dashboard Controls */}
+          {timeSeriesData && !timeSeriesError && dashboardData.flightDuration && (
+            <DashboardControls
+              timeSeriesData={timeSeriesData}
+              selectedParameters={selectedParameters}
+              onParameterChange={setSelectedParameters}
+              timeRange={timeRange}
+              onTimeRangeChange={setTimeRange}
+              totalDuration={dashboardData.flightDuration}
+              onExport={handleEnhancedExport}
+              className="mb-8"
+            />
+          )}
+
+          {/* Comprehensive Parameter Analysis - Phase 3B with Phase 4 Filtering */}
+          {filteredTimeSeriesData && Object.keys(filteredTimeSeriesData).length > 0 && (
+            <>
+              {/* Flight Dynamics Category */}
+              <ParameterCategorySection
+                title="Flight Dynamics"
+                icon={Activity}
+                description="Core flight performance and movement analysis"
+                timeSeriesData={filteredTimeSeriesData}
+                className="mb-8"
+              />
+
+              {/* Power Systems Category */}
+              <ParameterCategorySection
+                title="Power Systems"
+                icon={Gauge}
+                description="Battery, current, and power consumption analysis"
+                timeSeriesData={filteredTimeSeriesData}
+                className="mb-8"
+              />
+
+              {/* Control Inputs Category */}
+              <ParameterCategorySection
+                title="Control Inputs"
+                icon={Settings}
+                description="RC inputs, autopilot commands, and servo responses"
+                timeSeriesData={filteredTimeSeriesData}
+                className="mb-8"
+              />
+
+              {/* System Health Category */}
+              <ParameterCategorySection
+                title="System Health"
+                icon={BarChart3}
+                description="CPU load, sensor status, and system diagnostics"
+                timeSeriesData={filteredTimeSeriesData}
+                className="mb-8"
+              />
+
+              {/* GPS Map Section (maintained as separate section) */}
+              {filteredTimeSeriesData.gps_lat && filteredTimeSeriesData.gps_lng && (
+                <section>
+                  <h2 className="text-2xl font-bold text-slate-900 mb-6">Flight Path</h2>
+                  <div className="mb-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
+                    <strong>Filtered View:</strong> Showing {filteredTimeSeriesData.gps_lat.length} GPS points 
+                    from {Math.round(timeRange.start/60)}m{Math.round(timeRange.start%60).toString().padStart(2,'0')}s 
+                    to {Math.round(timeRange.end/60)}m{Math.round(timeRange.end%60).toString().padStart(2,'0')}s
+                  </div>
+                  <Suspense fallback={<ChartSkeleton />}>
+                    <GpsMap
+                      gpsLatData={filteredTimeSeriesData.gps_lat}
+                      gpsLngData={filteredTimeSeriesData.gps_lng}
+                      altitudeData={filteredTimeSeriesData.altitude}
+                    />
+                  </Suspense>
+                </section>
+              )}
+            </>
+          )}
+
+          {/* No Data After Filtering Message */}
+          {timeSeriesData && Object.keys(filteredTimeSeriesData).length === 0 && (
+            <div className="text-center py-12">
+              <BarChart3 className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">No Data in Selected Range</h3>
+              <p className="text-slate-600 mb-4">
+                The current parameter and time range selections don't contain any data points.
+              </p>
+              <button
+                onClick={() => {
+                  setSelectedParameters(Object.keys(timeSeriesData));
+                  setTimeRange({ start: 0, end: dashboardData?.flightDuration || 0 });
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Reset Filters
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {dashboardData.uploadStatus === "ERROR" && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <h3 className="text-lg font-medium text-red-900">Processing Error</h3>
+          <p className="text-red-700 mt-1">
+            There was an error processing your log file. Please try uploading again or contact support.
+          </p>
+        </div>
+      )}
+
+      {/* AI Preview Modal */}
+      <AiPreviewModal
+        isOpen={showAiPreviewModal}
+        onClose={() => {
+          trackAiEvent.mutate({ 
+            event: "modal_closed", 
+            logFileId,
+            metadata: { modal_type: "ai_preview" }
+          });
+          setShowAiPreviewModal(false);
+        }}
+        logFileName={dashboardData?.fileName}
+        onUpgradeClick={(tier) => {
+          trackAiEvent.mutate({ 
+            event: "upgrade_clicked", 
+            logFileId,
+            metadata: { source: "preview_modal", tier }
+          });
+          // TODO: Implement upgrade flow - redirect to billing/subscription page
+          console.log("Upgrade requested for tier:", tier);
+          setShowAiPreviewModal(false);
+        }}
+        onTryPreview={() => {
+          trackAiEvent.mutate({ 
+            event: "trial_started", 
+            logFileId,
+            metadata: { source: "preview_modal" }
+          });
+          
+          if (userAiPreferences && !userAiPreferences.aiPreviewUsed) {
+            generateAiPreview.mutate({ logFileId });
+          }
+        }}
+      />
+    </DashboardLayout>
+  );
+}
