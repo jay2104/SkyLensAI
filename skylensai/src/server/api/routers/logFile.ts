@@ -9,6 +9,7 @@ import {
 import { LogParser } from "~/server/services/logParser";
 import { ChartRenderer } from "~/server/services/chartRenderer";
 import { TrendAnalyzer } from "~/server/services/trendAnalyzer";
+import { ParameterIntelligenceService } from "~/server/services/parameterIntelligence";
 
 export const logFileRouter = createTRPCRouter({
   // Get presigned upload URL for file uploads
@@ -17,7 +18,7 @@ export const logFileRouter = createTRPCRouter({
       z.object({
         fileName: z.string().min(1, "File name is required").max(255, "File name too long"),
         fileType: z.nativeEnum(LogFileType),
-        fileSize: z.number().min(1).max(100 * 1024 * 1024, "File size must be under 100MB"),
+        fileSize: z.number().min(1).max(50 * 1024 * 1024, "File size must be under 50MB"),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -155,34 +156,46 @@ export const logFileRouter = createTRPCRouter({
       try {
         console.log(`Processing log file ${logFile.id}: ${logFile.fileName}`);
         
-        const { createClient } = await import('@supabase/supabase-js');
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
-        );
-
-        // Download file from Supabase
-        const filePath = `log-files/${ctx.session.user.id}/${logFile.id}/${logFile.fileName}`;
-        console.log(`Downloading file from path: ${filePath}`);
+        // Try local storage first, fallback to Supabase
+        const fs = await import('fs/promises');
+        const path = await import('path');
         
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from('log-files')
-          .download(filePath);
+        const localPath = path.join(process.cwd(), 'uploads', ctx.session.user.id, `${logFile.id}_${logFile.fileName}`);
+        let buffer: Buffer;
+        
+        try {
+          // Try local storage first
+          buffer = await fs.readFile(localPath);
+          console.log(`File read from local storage: ${localPath}, size: ${buffer.length} bytes`);
+        } catch (localError) {
+          console.log(`Local file not found, trying Supabase: ${localError}`);
+          
+          // Fallback to Supabase
+          const { createClient } = await import('@supabase/supabase-js');
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+          );
 
-        if (downloadError) {
-          console.error(`Supabase download error:`, downloadError);
-          throw new Error(`Failed to download file: ${downloadError.message}`);
+          const filePath = `log-files/${ctx.session.user.id}/${logFile.id}/${logFile.fileName}`;
+          console.log(`Downloading file from Supabase path: ${filePath}`);
+          
+          const { data: fileData, error: downloadError } = await supabase.storage
+            .from('log-files')
+            .download(filePath);
+
+          if (downloadError) {
+            console.error(`Supabase download error:`, downloadError);
+            throw new Error(`Failed to download from both local and Supabase: ${downloadError.message}`);
+          }
+
+          if (!fileData) {
+            throw new Error("No file data received from Supabase");
+          }
+
+          buffer = Buffer.from(await fileData.arrayBuffer());
+          console.log(`File downloaded from Supabase, size: ${buffer.length} bytes`);
         }
-
-        if (!fileData) {
-          throw new Error("No file data received from Supabase");
-        }
-
-        console.log(`File downloaded successfully, size: ${fileData.size} bytes`);
-
-        // Convert blob to buffer for parsing
-        const buffer = Buffer.from(await fileData.arrayBuffer());
-        console.log(`Buffer created, size: ${buffer.length} bytes`);
         
         const parsedData = await LogParser.parseLogFileFromBuffer(logFile.id, logFile.fileType, buffer);
         
@@ -346,6 +359,119 @@ export const logFileRouter = createTRPCRouter({
       });
 
       return groupedData;
+    }),
+
+  // Get intelligent parameter metadata using AI analysis
+  getParameterMetadata: protectedProcedure
+    .input(
+      z.object({
+        logFileId: z.string().cuid(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      // Verify user owns the file
+      const logFile = await ctx.db.logFile.findFirst({
+        where: {
+          id: input.logFileId,
+          userId: ctx.session.user.id,
+        },
+      });
+
+      if (!logFile) {
+        throw new Error("Log file not found or access denied");
+      }
+
+      // Get unique parameters with sample data for AI analysis
+      const uniqueParams = await ctx.db.timeSeriesPoint.groupBy({
+        by: ['parameter', 'unit'],
+        where: {
+          logFileId: input.logFileId,
+        },
+        _count: {
+          parameter: true,
+        },
+        orderBy: {
+          _count: {
+            parameter: 'desc',
+          },
+        },
+      });
+
+      if (uniqueParams.length === 0) {
+        return { categories: [], totalParameters: 0 };
+      }
+
+      // Get sample values for each parameter to help AI analysis
+      const parametersWithSamples = await Promise.all(
+        uniqueParams.map(async (param) => {
+          const samples = await ctx.db.timeSeriesPoint.findMany({
+            where: {
+              logFileId: input.logFileId,
+              parameter: param.parameter,
+            },
+            select: { value: true },
+            take: 5, // Get 5 sample values for AI context
+            orderBy: { timestamp: 'asc' },
+          });
+
+          return {
+            parameter: param.parameter,
+            unit: param.unit,
+            count: param._count.parameter,
+            sampleValues: samples.map(s => s.value),
+          };
+        })
+      );
+
+      try {
+        // Use AI to analyze and enhance parameter metadata
+        const enhancedMetadata = await ParameterIntelligenceService.analyzeParameters(
+          parametersWithSamples.map(p => ({
+            parameter: p.parameter,
+            unit: p.unit,
+            sampleValues: p.sampleValues,
+          }))
+        );
+
+        // Organize into intelligent categories
+        const categories = ParameterIntelligenceService.categorizeParameters(enhancedMetadata);
+
+        return {
+          categories,
+          totalParameters: uniqueParams.length,
+          aiEnhanced: true,
+        };
+
+      } catch (error) {
+        console.error('AI parameter analysis failed:', error);
+        
+        // Fallback to basic categorization
+        const fallbackMetadata = parametersWithSamples.map(p => ({
+          parameter: p.parameter,
+          displayName: p.parameter.replace(/_/g, ' '),
+          category: 'System_Health',
+          description: `${p.parameter} telemetry data`,
+          priority: 3,
+          unit: p.unit,
+          chartType: 'line' as const,
+          colorHint: '#6b7280',
+          isCore: false,
+          count: p.count,
+        }));
+
+        return {
+          categories: [{
+            name: 'All_Parameters',
+            displayName: 'All Parameters',
+            description: 'Flight log telemetry parameters',
+            icon: 'BarChart3',
+            parameters: fallbackMetadata,
+            priority: 1,
+          }],
+          totalParameters: uniqueParams.length,
+          aiEnhanced: false,
+        };
+      }
     }),
 
   // Export data functionality

@@ -146,7 +146,6 @@ describe("LogParser - Phase 3A Real Implementation (No Fake Data)", () => {
 
     it("handles unsupported file types", async () => {
       const logFileId = "test-log-id";
-      // @ts-expect-error - intentionally testing unsupported file type
       const unsupportedType = "UNSUPPORTED" as LogFileType;
 
       await expect(

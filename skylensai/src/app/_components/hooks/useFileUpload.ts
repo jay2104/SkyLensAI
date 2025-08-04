@@ -61,7 +61,15 @@ export function useFileUpload() {
       });
 
       if (!uploadResponse.ok) {
-        throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+        // Get detailed error information from Supabase
+        const errorText = await uploadResponse.text();
+        console.error('Upload failed details:', {
+          status: uploadResponse.status,
+          statusText: uploadResponse.statusText,
+          headers: Object.fromEntries(uploadResponse.headers.entries()),
+          body: errorText
+        });
+        throw new Error(`Upload failed (${uploadResponse.status}): ${uploadResponse.statusText}. ${errorText}`);
       }
 
       setUploadProgress(80);

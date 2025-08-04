@@ -4,6 +4,12 @@ import { useState, useMemo } from "react";
 import {
   LineChart,
   Line,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  ScatterChart,
+  Scatter,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -27,6 +33,7 @@ interface FlightChartProps {
   color: string;
   multiSeries?: boolean;
   height?: number;
+  chartType?: 'line' | 'area' | 'bar' | 'scatter';
 }
 
 const SERIES_COLORS = [
@@ -47,6 +54,7 @@ export default function FlightChart({
   color,
   multiSeries = false,
   height = 300,
+  chartType = 'line',
 }: FlightChartProps) {
   const [visibleSeries, setVisibleSeries] = useState<Set<string>>(new Set());
   const [zoomDomain, setZoomDomain] = useState<{ x?: [number, number]; y?: [number, number] }>({});
@@ -220,54 +228,123 @@ export default function FlightChart({
       {/* Chart */}
       <div style={{ height: `${height}px` }}>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={chartData}
-            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis
-              dataKey="timestamp"
-              tickFormatter={formatTimestamp}
-              stroke="#64748b"
-              fontSize={12}
-              domain={zoomDomain.x || ["dataMin", "dataMax"]}
-            />
-            <YAxis
-              stroke="#64748b"
-              fontSize={12}
-              domain={zoomDomain.y || ["dataMin", "dataMax"]}
-              tickFormatter={(value) => formatValue(value, data[0]?.unit)}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "#1e293b",
-                border: "none",
-                borderRadius: "8px",
-                color: "#f8fafc",
-              }}
-              labelFormatter={(timestamp) => `Time: ${formatTimestamp(Number(timestamp))}`}
-              formatter={(value: number, name: string) => [
-                formatValue(value, data[0]?.unit),
-                name,
-              ]}
-            />
-            {multiSeries && <Legend />}
-            
-            {/* Render lines */}
-            {seriesNames.map((name, index) => (
-              visibleSeries.has(name) && (
-                <Line
-                  key={name}
-                  type="monotone"
-                  dataKey={name}
-                  stroke={multiSeries ? SERIES_COLORS[index % SERIES_COLORS.length] : color}
-                  strokeWidth={2}
-                  dot={false}
-                  connectNulls={false}
+          {(() => {
+            const chartProps = {
+              data: chartData,
+              margin: { top: 5, right: 30, left: 20, bottom: 5 }
+            };
+
+            const commonElements = (
+              <>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis
+                  dataKey="timestamp"
+                  tickFormatter={formatTimestamp}
+                  stroke="#64748b"
+                  fontSize={12}
+                  domain={zoomDomain.x || ["dataMin", "dataMax"]}
                 />
-              )
-            ))}
-          </LineChart>
+                <YAxis
+                  stroke="#64748b"
+                  fontSize={12}
+                  domain={zoomDomain.y || ["dataMin", "dataMax"]}
+                  tickFormatter={(value) => formatValue(value, data[0]?.unit)}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "#1e293b",
+                    border: "none",
+                    borderRadius: "8px",
+                    color: "#f8fafc",
+                  }}
+                  labelFormatter={(timestamp) => `Time: ${formatTimestamp(Number(timestamp))}`}
+                  formatter={(value: number, name: string) => [
+                    formatValue(value, data[0]?.unit),
+                    name,
+                  ]}
+                />
+                {multiSeries && <Legend />}
+              </>
+            );
+
+            // Render different chart types based on chartType prop
+            switch (chartType) {
+              case 'area':
+                return (
+                  <AreaChart {...chartProps}>
+                    {commonElements}
+                    {seriesNames.map((name, index) => (
+                      visibleSeries.has(name) && (
+                        <Area
+                          key={name}
+                          type="monotone"
+                          dataKey={name}
+                          stroke={multiSeries ? SERIES_COLORS[index % SERIES_COLORS.length] : color}
+                          fill={multiSeries ? SERIES_COLORS[index % SERIES_COLORS.length] : color}
+                          fillOpacity={0.3}
+                          strokeWidth={2}
+                          connectNulls={false}
+                        />
+                      )
+                    ))}
+                  </AreaChart>
+                );
+
+              case 'bar':
+                return (
+                  <BarChart {...chartProps}>
+                    {commonElements}
+                    {seriesNames.map((name, index) => (
+                      visibleSeries.has(name) && (
+                        <Bar
+                          key={name}
+                          dataKey={name}
+                          fill={multiSeries ? SERIES_COLORS[index % SERIES_COLORS.length] : color}
+                          fillOpacity={0.8}
+                        />
+                      )
+                    ))}
+                  </BarChart>
+                );
+
+              case 'scatter':
+                return (
+                  <ScatterChart {...chartProps}>
+                    {commonElements}
+                    {seriesNames.map((name, index) => (
+                      visibleSeries.has(name) && (
+                        <Scatter
+                          key={name}
+                          dataKey={name}
+                          fill={multiSeries ? SERIES_COLORS[index % SERIES_COLORS.length] : color}
+                        />
+                      )
+                    ))}
+                  </ScatterChart>
+                );
+
+              case 'line':
+              default:
+                return (
+                  <LineChart {...chartProps}>
+                    {commonElements}
+                    {seriesNames.map((name, index) => (
+                      visibleSeries.has(name) && (
+                        <Line
+                          key={name}
+                          type="monotone"
+                          dataKey={name}
+                          stroke={multiSeries ? SERIES_COLORS[index % SERIES_COLORS.length] : color}
+                          strokeWidth={2}
+                          dot={false}
+                          connectNulls={false}
+                        />
+                      )
+                    ))}
+                  </LineChart>
+                );
+            }
+          })()}
         </ResponsiveContainer>
       </div>
 

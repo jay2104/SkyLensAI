@@ -10,6 +10,7 @@ import AiPreviewModal from "~/app/_components/AiPreviewModal";
 import VirtualExpertPanel from "~/app/_components/VirtualExpertPanel";
 import ParameterCategorySection from "~/app/_components/ParameterCategorySection";
 import DashboardControls from "~/app/_components/DashboardControls";
+import DynamicParameterSection from "~/app/_components/DynamicParameterSection";
 import { type DroneContext } from "~/server/services/openaiService";
 import { Activity, Gauge, Settings, BarChart3 } from "lucide-react";
 
@@ -86,6 +87,15 @@ export default function DashboardPage() {
 
   // Fetch time series data
   const { data: timeSeriesData, isLoading: isTimeSeriesLoading, error: timeSeriesError } = api.logFile.getTimeSeriesData.useQuery(
+    { logFileId },
+    { 
+      enabled: !!logFileId && dashboardData?.uploadStatus === "PROCESSED",
+      retry: false,
+    }
+  );
+
+  // Fetch AI-enhanced parameter metadata
+  const { data: parameterMetadata, isLoading: isParameterMetadataLoading, error: parameterMetadataError } = api.logFile.getParameterMetadata.useQuery(
     { logFileId },
     { 
       enabled: !!logFileId && dashboardData?.uploadStatus === "PROCESSED",
@@ -267,7 +277,7 @@ export default function DashboardPage() {
   return (
     <DashboardLayout
       logFileName={dashboardData.fileName}
-      isLoading={isProcessing || isTimeSeriesLoading}
+      isLoading={isProcessing || isTimeSeriesLoading || isParameterMetadataLoading}
       onExport={isProcessed ? handleExport : undefined}
     >
       {needsProcessing && (
@@ -440,64 +450,120 @@ export default function DashboardPage() {
             />
           )}
 
-          {/* Comprehensive Parameter Analysis - Phase 3B with Phase 4 Filtering */}
-          {filteredTimeSeriesData && Object.keys(filteredTimeSeriesData).length > 0 && (
+          {/* AI-Enhanced Dynamic Parameter Analysis */}
+          {parameterMetadata && parameterMetadata.categories && filteredTimeSeriesData && Object.keys(filteredTimeSeriesData).length > 0 && (
             <>
-              {/* Flight Dynamics Category */}
-              <ParameterCategorySection
-                title="Flight Dynamics"
-                icon={Activity}
-                description="Core flight performance and movement analysis"
-                timeSeriesData={filteredTimeSeriesData}
-                className="mb-8"
-              />
-
-              {/* Power Systems Category */}
-              <ParameterCategorySection
-                title="Power Systems"
-                icon={Gauge}
-                description="Battery, current, and power consumption analysis"
-                timeSeriesData={filteredTimeSeriesData}
-                className="mb-8"
-              />
-
-              {/* Control Inputs Category */}
-              <ParameterCategorySection
-                title="Control Inputs"
-                icon={Settings}
-                description="RC inputs, autopilot commands, and servo responses"
-                timeSeriesData={filteredTimeSeriesData}
-                className="mb-8"
-              />
-
-              {/* System Health Category */}
-              <ParameterCategorySection
-                title="System Health"
-                icon={BarChart3}
-                description="CPU load, sensor status, and system diagnostics"
-                timeSeriesData={filteredTimeSeriesData}
-                className="mb-8"
-              />
-
-              {/* GPS Map Section (maintained as separate section) */}
-              {filteredTimeSeriesData.gps_lat && filteredTimeSeriesData.gps_lng && (
-                <section>
-                  <h2 className="text-2xl font-bold text-slate-900 mb-6">Flight Path</h2>
-                  <div className="mb-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
-                    <strong>Filtered View:</strong> Showing {filteredTimeSeriesData.gps_lat.length} GPS points 
-                    from {Math.round(timeRange.start/60)}m{Math.round(timeRange.start%60).toString().padStart(2,'0')}s 
-                    to {Math.round(timeRange.end/60)}m{Math.round(timeRange.end%60).toString().padStart(2,'0')}s
+              <section className="mb-8">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-100">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-2xl font-bold text-slate-900 mb-2">
+                        🧠 AI-Enhanced Parameter Analysis
+                      </h2>
+                      <p className="text-slate-600">
+                        Intelligent categorization and analysis of {parameterMetadata.totalParameters} flight parameters
+                        {parameterMetadata.aiEnhanced && " using AI inference"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-blue-600">
+                        {parameterMetadata.totalParameters}
+                      </div>
+                      <div className="text-sm text-slate-500">
+                        Parameters
+                      </div>
+                    </div>
                   </div>
-                  <Suspense fallback={<ChartSkeleton />}>
-                    <GpsMap
-                      gpsLatData={filteredTimeSeriesData.gps_lat}
-                      gpsLngData={filteredTimeSeriesData.gps_lng}
-                      altitudeData={filteredTimeSeriesData.altitude}
-                    />
-                  </Suspense>
-                </section>
-              )}
+                  {parameterMetadata.aiEnhanced && (
+                    <div className="mt-3 text-sm text-blue-700">
+                      ✨ Parameters analyzed with AI to provide human-readable names and intelligent categorization
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Dynamic Parameter Categories */}
+              {parameterMetadata.categories.map((category, index) => (
+                <DynamicParameterSection
+                  key={category.name}
+                  category={category}
+                  timeSeriesData={filteredTimeSeriesData}
+                  className="mb-8"
+                />
+              ))}
+
+              {/* GPS Map Section (if GPS data exists) */}
+              {(() => {
+                // Look for GPS parameters in any category
+                const gpsLatParam = parameterMetadata.categories
+                  .flatMap(c => c.parameters)
+                  .find(p => p.parameter.toLowerCase().includes('lat') || p.displayName.toLowerCase().includes('latitude'));
+                const gpsLngParam = parameterMetadata.categories
+                  .flatMap(c => c.parameters)
+                  .find(p => p.parameter.toLowerCase().includes('lng') || p.parameter.toLowerCase().includes('lon') || p.displayName.toLowerCase().includes('longitude'));
+                const altParam = parameterMetadata.categories
+                  .flatMap(c => c.parameters)
+                  .find(p => p.parameter.toLowerCase().includes('alt') || p.displayName.toLowerCase().includes('altitude'));
+
+                const gpsLatData = gpsLatParam ? filteredTimeSeriesData[gpsLatParam.parameter] : null;
+                const gpsLngData = gpsLngParam ? filteredTimeSeriesData[gpsLngParam.parameter] : null;
+                const altitudeData = altParam ? filteredTimeSeriesData[altParam.parameter] : null;
+
+                if (gpsLatData && gpsLngData && gpsLatData.length > 0 && gpsLngData.length > 0) {
+                  return (
+                    <section>
+                      <h2 className="text-2xl font-bold text-slate-900 mb-6">Flight Path</h2>
+                      <div className="mb-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
+                        <strong>Filtered View:</strong> Showing {gpsLatData.length} GPS points 
+                        from {Math.round(timeRange.start/60)}m{Math.round(timeRange.start%60).toString().padStart(2,'0')}s 
+                        to {Math.round(timeRange.end/60)}m{Math.round(timeRange.end%60).toString().padStart(2,'0')}s
+                      </div>
+                      <Suspense fallback={<ChartSkeleton />}>
+                        <GpsMap
+                          gpsLatData={gpsLatData}
+                          gpsLngData={gpsLngData}
+                          altitudeData={altitudeData || undefined}
+                        />
+                      </Suspense>
+                    </section>
+                  );
+                }
+                return null;
+              })()}
             </>
+          )}
+
+          {/* Fallback: Show traditional parameter view if AI analysis fails */}
+          {parameterMetadataError && filteredTimeSeriesData && Object.keys(filteredTimeSeriesData).length > 0 && (
+            <section className="mb-8">
+              <div className="bg-yellow-50 rounded-lg p-6 border border-yellow-200">
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">
+                  📊 Parameter Analysis (Fallback Mode)
+                </h2>
+                <p className="text-slate-600 mb-4">
+                  AI analysis unavailable. Showing {Object.keys(filteredTimeSeriesData).length} parameters in basic view.
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.entries(filteredTimeSeriesData).map(([param, data]) => (
+                    <div key={param} className="bg-white rounded-lg p-4 border border-slate-200">
+                      <h3 className="font-medium text-slate-900 mb-2">
+                        {param.replace(/_/g, ' ')}
+                      </h3>
+                      <p className="text-sm text-slate-600 mb-2">
+                        {data.length.toLocaleString()} data points
+                      </p>
+                      <FlightChart
+                        title={param}
+                        data={data}
+                        parameter={param}
+                        color="#3b82f6"
+                        height={200}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
           )}
 
           {/* No Data After Filtering Message */}
