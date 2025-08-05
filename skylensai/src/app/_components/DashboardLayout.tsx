@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Menu, X, BarChart3, Map, Settings, Download } from "lucide-react";
+import { Loader2, Menu, X, BarChart3, Map, Settings, Download, Database } from "lucide-react";
+import Link from "next/link";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
   logFileName?: string;
+  logFileId?: string; // Add logFileId for navigation
   isLoading?: boolean;
   onExport?: (format: "csv" | "json") => void;
+  onParametersToggle?: () => void;
 }
 
 interface NavItem {
@@ -20,8 +23,10 @@ interface NavItem {
 export default function DashboardLayout({ 
   children, 
   logFileName = "Flight Log", 
+  logFileId,
   isLoading = false,
-  onExport 
+  onExport,
+  onParametersToggle
 }: DashboardLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState("overview");
@@ -30,6 +35,7 @@ export default function DashboardLayout({
     { id: "overview", label: "Overview", icon: BarChart3, active: activeSection === "overview" },
     { id: "charts", label: "Charts", icon: BarChart3, active: activeSection === "charts" },
     { id: "map", label: "Flight Path", icon: Map, active: activeSection === "map" },
+    { id: "raw-data", label: "Raw Data", icon: Database, active: activeSection === "raw-data" },
     { id: "settings", label: "Settings", icon: Settings, active: activeSection === "settings" },
   ];
 
@@ -61,6 +67,25 @@ export default function DashboardLayout({
             <nav className="hidden md:flex items-center space-x-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
+                
+                // Special handling for Raw Data link
+                if (item.id === "raw-data" && logFileId) {
+                  return (
+                    <Link
+                      key={item.id}
+                      href={`/dashboard/${logFileId}/raw-data`}
+                      className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
+                        item.active
+                          ? "bg-blue-100 text-blue-700"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                }
+                
                 return (
                   <button
                     key={item.id}
@@ -80,6 +105,17 @@ export default function DashboardLayout({
 
             {/* Action Buttons */}
             <div className="flex items-center space-x-2">
+              {/* Parameters Button */}
+              {onParametersToggle && (
+                <button
+                  onClick={onParametersToggle}
+                  className="inline-flex items-center px-3 py-2 border border-slate-300 shadow-sm text-sm leading-4 font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Parameters
+                </button>
+              )}
+
               {/* Export Dropdown */}
               {onExport && (
                 <div className="relative">
@@ -114,6 +150,26 @@ export default function DashboardLayout({
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white border-t border-slate-200">
               {navItems.map((item) => {
                 const Icon = item.icon;
+                
+                // Special handling for Raw Data link
+                if (item.id === "raw-data" && logFileId) {
+                  return (
+                    <Link
+                      key={item.id}
+                      href={`/dashboard/${logFileId}/raw-data`}
+                      className={`w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors flex items-center space-x-3 ${
+                        item.active
+                          ? "bg-blue-100 text-blue-700"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                      }`}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                }
+                
                 return (
                   <button
                     key={item.id}

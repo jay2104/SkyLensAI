@@ -11,7 +11,7 @@ import VirtualExpertPanel from "~/app/_components/VirtualExpertPanel";
 import ParameterCategorySection from "~/app/_components/ParameterCategorySection";
 import DashboardControls from "~/app/_components/DashboardControls";
 import DynamicParameterSection from "~/app/_components/DynamicParameterSection";
-import RawDataViewer from "~/app/_components/RawDataViewer";
+import ParametersSidebar from "~/app/_components/ParametersSidebar";
 import { type DroneContext } from "~/server/services/openaiService";
 import { Activity, Gauge, Settings, BarChart3 } from "lucide-react";
 
@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const logFileId = params.logFileId as string;
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAiPreviewModal, setShowAiPreviewModal] = useState(false);
+  const [isParametersSidebarOpen, setIsParametersSidebarOpen] = useState(false);
   
   // Interactive dashboard state
   const [selectedParameters, setSelectedParameters] = useState<string[]>([]);
@@ -322,11 +323,15 @@ export default function DashboardPage() {
   const isProcessed = dashboardData.uploadStatus === "PROCESSED";
 
   return (
-    <DashboardLayout
-      logFileName={dashboardData.fileName}
-      isLoading={isProcessing || isTimeSeriesLoading || isParameterMetadataLoading}
-      onExport={isProcessed ? handleExport : undefined}
-    >
+    <div className="flex h-screen">
+      <div className="flex-1 overflow-auto">
+        <DashboardLayout
+          logFileName={dashboardData.fileName}
+          logFileId={logFileId}
+          isLoading={isProcessing || isTimeSeriesLoading || isParameterMetadataLoading}
+          onExport={isProcessed ? handleExport : undefined}
+          onParametersToggle={() => setIsParametersSidebarOpen(!isParametersSidebarOpen)}
+        >
       {needsProcessing && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
           <div className="flex items-center justify-between">
@@ -422,11 +427,6 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {/* Raw Data Viewer Section */}
-          <RawDataViewer 
-            logFileId={logFileId}
-            className="mb-8"
-          />
 
           {/* AI Insights Section - HIDDEN */}
           {/* <section>
@@ -708,6 +708,15 @@ export default function DashboardPage() {
           }
         }}
       />
-    </DashboardLayout>
+        </DashboardLayout>
+      </div>
+
+      {/* Parameters Sidebar */}
+      <ParametersSidebar
+        logFileId={logFileId}
+        isOpen={isParametersSidebarOpen}
+        onClose={() => setIsParametersSidebarOpen(false)}
+      />
+    </div>
   );
 }

@@ -7,6 +7,7 @@ import { api } from "~/trpc/react";
 interface RawDataViewerProps {
   logFileId: string;
   className?: string;
+  alwaysExpanded?: boolean; // For dedicated raw data page
 }
 
 interface MessageGroup {
@@ -19,8 +20,8 @@ interface MessageGroup {
   fields: string[];
 }
 
-export default function RawDataViewer({ logFileId, className = "" }: RawDataViewerProps) {
-  const [isVisible, setIsVisible] = useState(false);
+export default function RawDataViewer({ logFileId, className = "", alwaysExpanded = false }: RawDataViewerProps) {
+  const [isVisible, setIsVisible] = useState(alwaysExpanded);
   const [rawData, setRawData] = useState<MessageGroup[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
@@ -29,7 +30,7 @@ export default function RawDataViewer({ logFileId, className = "" }: RawDataView
   const { data: fetchedRawData, isLoading: isFetching, error: fetchError } = api.logFile.getRawParsedData.useQuery(
     { logFileId },
     { 
-      enabled: isVisible && !rawData, // Only fetch when visible and not already loaded
+      enabled: (isVisible || alwaysExpanded) && !rawData, // Load immediately if always expanded
       retry: false 
     }
   );
@@ -70,12 +71,13 @@ export default function RawDataViewer({ logFileId, className = "" }: RawDataView
   };
 
   return (
-    <div className={`bg-white rounded-lg border border-slate-200 ${className}`}>
-      {/* Toggle Header */}
-      <div 
-        className="p-4 border-b border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors"
-        onClick={toggleVisibility}
-      >
+    <div className={`${!alwaysExpanded ? 'bg-white rounded-lg border border-slate-200' : ''} ${className}`}>
+      {/* Toggle Header - only show if not always expanded */}
+      {!alwaysExpanded && (
+        <div 
+          className="p-4 border-b border-slate-200 cursor-pointer hover:bg-slate-50 transition-colors"
+          onClick={toggleVisibility}
+        >
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
             {isVisible ? <EyeOff className="w-5 h-5 text-slate-600" /> : <Eye className="w-5 h-5 text-slate-600" />}
@@ -97,10 +99,11 @@ export default function RawDataViewer({ logFileId, className = "" }: RawDataView
             />
           </div>
         </div>
-      </div>
+        </div>
+      )}
 
       {/* Raw Data Content */}
-      {isVisible && (
+      {(isVisible || alwaysExpanded) && (
         <div className="p-4">
           {isFetching && (
             <div className="flex items-center justify-center py-8">
