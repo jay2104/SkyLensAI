@@ -308,6 +308,8 @@ export const logFileRouter = createTRPCRouter({
       })
     )
     .query(async ({ ctx, input }) => {
+      console.log(`[getTimeSeriesData] Request for logFileId: ${input.logFileId}, user: ${ctx.session.user.id}`);
+      
       // Verify user owns the file
       const logFile = await ctx.db.logFile.findFirst({
         where: {
@@ -317,8 +319,11 @@ export const logFileRouter = createTRPCRouter({
       });
 
       if (!logFile) {
+        console.log(`[getTimeSeriesData] Access denied for logFileId: ${input.logFileId}, user: ${ctx.session.user.id}`);
         throw new Error("Log file not found or access denied");
       }
+
+      console.log(`[getTimeSeriesData] File access verified. Status: ${logFile.uploadStatus}`);
 
       const whereClause: any = {
         logFileId: input.logFileId,
@@ -328,6 +333,9 @@ export const logFileRouter = createTRPCRouter({
         whereClause.parameter = {
           in: input.parameters,
         };
+        console.log(`[getTimeSeriesData] Filtering by parameters: ${input.parameters.join(', ')}`);
+      } else {
+        console.log(`[getTimeSeriesData] No parameter filter - returning all data`);
       }
 
       const timeSeriesData = await ctx.db.timeSeriesPoint.findMany({
@@ -339,6 +347,8 @@ export const logFileRouter = createTRPCRouter({
         take: input.limit,
         skip: input.offset,
       });
+
+      console.log(`[getTimeSeriesData] Query returned ${timeSeriesData.length} records`);
 
       // Group data by parameter for easier frontend consumption
       const groupedData: Record<string, Array<{
