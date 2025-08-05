@@ -943,4 +943,75 @@ export const logFileRouter = createTRPCRouter({
         throw new Error("Failed to parse log file for raw data");
       }
     }),
+
+  // Get vehicle configuration parameters from PARM messages
+  getVehicleParameters: protectedProcedure
+    .input(
+      z.object({
+        logFileId: z.string().cuid(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      // Get log file info
+      const logFile = await ctx.db.logFile.findFirst({
+        where: {
+          id: input.logFileId,
+          userId: ctx.session.user.id,
+        },
+      });
+
+      if (!logFile) {
+        throw new Error("Log file not found or access denied");
+      }
+
+      if (logFile.uploadStatus !== "PROCESSED") {
+        throw new Error("Log file has not been processed yet");
+      }
+
+      // Download file from Supabase Storage
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+
+      const filePath = `log-files/${logFile.userId}/${logFile.id}/${logFile.fileName}`;
+      
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('log-files')
+        .download(filePath);
+
+      if (downloadError) {
+        console.error(`Supabase download error:`, downloadError);
+        throw new Error(`Failed to download file from storage: ${downloadError.message}`);
+      }
+
+      if (!fileData) {
+        throw new Error("No file data received from storage");
+      }
+
+      const buffer = Buffer.from(await fileData.arrayBuffer());
+      
+      try {
+        const rawMessages = LogParser.parseLogFileRawFromBuffer(buffer);
+        
+        // Extract PARM messages and convert to vehicle parameters
+        const parmMessages = rawMessages['PARM'] || [];
+        
+        const parameters = parmMessages.map((msg: any) => ({
+          name: msg.data.Name || msg.data.name || 'Unknown',
+          value: msg.data.Value !== undefined ? msg.data.Value : msg.data.value,
+          default: msg.data.Default !== undefined ? msg.data.Default : msg.data.default,
+          timestamp: msg.timestamp
+        })).filter((param: any) => param.name && param.name !== 'Unknown');
+
+        return {
+          totalCount: parameters.length,
+          parameters: parameters.sort((a: any, b: any) => a.name.localeCompare(b.name))
+        };
+      } catch (error) {
+        console.error("Failed to parse vehicle parameters:", error);
+        throw new Error("Failed to parse log file for vehicle parameters");
+      }
+    }),
 });

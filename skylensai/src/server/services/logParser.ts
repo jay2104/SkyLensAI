@@ -117,6 +117,7 @@ enum ArduPilotMessageType {
   UNIT = 'UNIT',      // Unit definitions
   MULT = 'MULT',      // Multipliers
   FMTU = 'FMTU',      // Format units
+  PARM = 'PARM',      // Vehicle parameters/configuration
   
   // Format definition
   FMT = 'FMT'         // Format message (structure definition)
@@ -197,6 +198,14 @@ interface ArduPilotParameterExtraction {
     VAcc: number;        // Vertical accuracy
     SAcc: number;        // Speed accuracy
     VV: number;          // Vertical velocity flag
+  };
+  
+  // Parameters (PARM) - Vehicle configuration parameters
+  PARM: {
+    TimeUS: number;      // Timestamp
+    Name: string;        // Parameter name
+    Value: number;       // Parameter value
+    Default: number;     // Default value
     SMS: number;         // System time
     Delta: number;       // Time delta
   };

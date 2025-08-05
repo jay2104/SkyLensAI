@@ -10,29 +10,35 @@ interface ParametersSidebarProps {
   onClose: () => void;
 }
 
-interface ParameterCategory {
+interface VehicleParameter {
   name: string;
-  parameters: Array<{
-    parameter: string;
-    displayName: string;
-    description: string;
-    unit: string;
-    category: string;
-  }>;
+  value: number | string;
+  default: number | string;
+  timestamp: number;
 }
 
 export default function ParametersSidebar({ logFileId, isOpen, onClose }: ParametersSidebarProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
-  // Fetch parameter metadata
-  const { data: parameterMetadata, isLoading, error } = api.logFile.getParameterMetadata.useQuery(
+  // Fetch vehicle parameters
+  const { data: vehicleParams, isLoading, error } = api.logFile.getVehicleParameters.useQuery(
     { logFileId },
     { 
       enabled: isOpen && !!logFileId,
       retry: false 
     }
   );
+
+  // Group parameters by category (first part of parameter name)
+  const groupedParameters = vehicleParams?.parameters?.reduce((groups: Record<string, VehicleParameter[]>, param) => {
+    const category = param.name.split('_')[0] || 'Other';
+    if (!groups[category]) {
+      groups[category] = [];
+    }
+    groups[category]!.push(param);
+    return groups;
+  }, {}) || {};
 
   const toggleCategory = (categoryName: string) => {
     const newExpanded = new Set(expandedCategories);
@@ -45,14 +51,23 @@ export default function ParametersSidebar({ logFileId, isOpen, onClose }: Parame
   };
 
   // Filter parameters based on search term
-  const filteredCategories = parameterMetadata?.categories?.map(category => ({
-    ...category,
-    parameters: category.parameters.filter(param => 
-      param.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      param.parameter.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      param.description.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  })).filter(category => category.parameters.length > 0) || [];
+  const filteredGroups = Object.entries(groupedParameters).reduce((filtered: Record<string, VehicleParameter[]>, [category, params]) => {
+    const matchingParams = params.filter(param => 
+      param.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    if (matchingParams.length > 0) {
+      filtered[category] = matchingParams;
+    }
+    return filtered;
+  }, {});
+
+  const formatValue = (value: number | string): string => {
+    if (typeof value === "number") {
+      if (Number.isInteger(value)) return value.toString();
+      return value.toFixed(2);
+    }
+    return String(value);
+  };
 
   return (
     <>
@@ -118,7 +133,7 @@ export default function ParametersSidebar({ logFileId, isOpen, onClose }: Parame
             </div>
           )}
 
-          {parameterMetadata && (
+          {vehicleParams && (
             <div className="p-4">
               {/* Parameter Summary */}
               <div className="bg-slate-50 rounded-lg p-3 mb-4">
@@ -126,20 +141,20 @@ export default function ParametersSidebar({ logFileId, isOpen, onClose }: Parame
                   <div className="flex justify-between mb-1">
                     <span>Total Parameters:</span>
                     <span className="font-medium text-slate-900">
-                      {parameterMetadata.totalParameters}
+                      {vehicleParams.totalCount}
                     </span>
                   </div>
                   <div className="flex justify-between mb-1">
                     <span>Categories:</span>
                     <span className="font-medium text-slate-900">
-                      {parameterMetadata.categories.length}
+                      {Object.keys(groupedParameters).length}
                     </span>
                   </div>
                   {searchTerm && (
                     <div className="flex justify-between">
                       <span>Filtered:</span>
                       <span className="font-medium text-slate-900">
-                        {filteredCategories.reduce((sum, cat) => sum + cat.parameters.length, 0)}
+                        {Object.values(filteredGroups).reduce((sum, params) => sum + params.length, 0)}
                       </span>
                     </div>
                   )}
@@ -148,44 +163,50 @@ export default function ParametersSidebar({ logFileId, isOpen, onClose }: Parame
 
               {/* Categories */}
               <div className="space-y-2">
-                {filteredCategories.map((category) => (
-                  <div key={category.name} className="border border-slate-200 rounded-lg">
+                {Object.entries(filteredGroups).map(([categoryName, parameters]) => (
+                  <div key={categoryName} className="border border-slate-200 rounded-lg">
                     <button
-                      onClick={() => toggleCategory(category.name)}
+                      onClick={() => toggleCategory(categoryName)}
                       className="w-full p-3 text-left hover:bg-slate-50 transition-colors flex items-center justify-between"
                     >
                       <div className="flex items-center space-x-2">
-                        {expandedCategories.has(category.name) ? (
+                        {expandedCategories.has(categoryName) ? (
                           <ChevronDown className="w-4 h-4 text-slate-500" />
                         ) : (
                           <ChevronRight className="w-4 h-4 text-slate-500" />
                         )}
-                        <span className="font-medium text-slate-900">{category.name}</span>
+                        <span className="font-medium text-slate-900">{categoryName}</span>
                       </div>
                       <span className="text-sm text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                        {category.parameters.length}
+                        {parameters.length}
                       </span>
                     </button>
 
-                    {expandedCategories.has(category.name) && (
+                    {expandedCategories.has(categoryName) && (
                       <div className="border-t border-slate-200 bg-slate-25">
-                        <div className="p-3 space-y-3">
-                          {category.parameters.map((param) => (
-                            <div key={param.parameter} className="bg-white rounded p-3 border border-slate-100">
-                              <div className="flex items-start justify-between mb-1">
-                                <h4 className="font-medium text-slate-900 text-sm">
-                                  {param.displayName}
-                                </h4>
-                                <span className="text-xs text-slate-500 bg-slate-100 px-1 py-0.5 rounded">
-                                  {param.unit}
-                                </span>
+                        <div className="p-3 space-y-2">
+                          {parameters.map((param) => (
+                            <div key={param.name} className="bg-white rounded p-3 border border-slate-100">
+                              <div className="flex items-center justify-between mb-2">
+                                <code className="font-mono text-sm font-medium text-slate-900">
+                                  {param.name}
+                                </code>
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-sm font-medium text-blue-600">
+                                    {formatValue(param.value)}
+                                  </span>
+                                  {param.value !== param.default && (
+                                    <span className="text-xs text-slate-500 bg-slate-100 px-1 py-0.5 rounded">
+                                      def: {formatValue(param.default)}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
-                              <p className="text-xs text-slate-600 mb-1">
-                                {param.description}
-                              </p>
-                              <code className="text-xs text-blue-600 bg-blue-50 px-1 py-0.5 rounded">
-                                {param.parameter}
-                              </code>
+                              {param.value !== param.default && (
+                                <div className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded">
+                                  Modified from default
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -195,7 +216,7 @@ export default function ParametersSidebar({ logFileId, isOpen, onClose }: Parame
                 ))}
               </div>
 
-              {filteredCategories.length === 0 && searchTerm && (
+              {Object.keys(filteredGroups).length === 0 && searchTerm && (
                 <div className="text-center py-8 text-slate-500">
                   <Search className="w-8 h-8 mx-auto mb-2" />
                   <p>No parameters found matching "{searchTerm}"</p>
