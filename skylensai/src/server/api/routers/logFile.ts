@@ -350,6 +350,16 @@ export const logFileRouter = createTRPCRouter({
 
       console.log(`[getTimeSeriesData] Query returned ${timeSeriesData.length} records`);
 
+      // Find the earliest timestamp to convert absolute timestamps to relative
+      let earliestTimestamp = Infinity;
+      timeSeriesData.forEach((point) => {
+        if (point.timestamp < earliestTimestamp) {
+          earliestTimestamp = point.timestamp;
+        }
+      });
+
+      console.log(`[getTimeSeriesData] Earliest timestamp: ${earliestTimestamp}, converting to relative time`);
+
       // Group data by parameter for easier frontend consumption
       const groupedData: Record<string, Array<{
         timestamp: number;
@@ -361,12 +371,23 @@ export const logFileRouter = createTRPCRouter({
         if (!groupedData[point.parameter]) {
           groupedData[point.parameter] = [];
         }
+        
+        // Convert absolute timestamp to relative timestamp (starting from 0)
+        const relativeTimestamp = point.timestamp - earliestTimestamp;
+        
         groupedData[point.parameter]!.push({
-          timestamp: point.timestamp,
+          timestamp: relativeTimestamp,
           value: point.value,
           unit: point.unit,
         });
       });
+
+      // Log sample of converted timestamps for debugging
+      const sampleParam = Object.keys(groupedData)[0];
+      if (sampleParam && groupedData[sampleParam]!.length > 0) {
+        console.log(`[getTimeSeriesData] Sample converted timestamps for ${sampleParam}:`, 
+          groupedData[sampleParam]!.slice(0, 3).map(p => p.timestamp));
+      }
 
       return groupedData;
     }),
