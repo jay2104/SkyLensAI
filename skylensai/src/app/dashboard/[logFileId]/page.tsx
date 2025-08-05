@@ -91,6 +91,14 @@ export default function DashboardPage() {
     { 
       enabled: !!logFileId && dashboardData?.uploadStatus === "PROCESSED",
       retry: false,
+      onSuccess: (data) => {
+        console.log("🔍 Frontend received timeSeriesData:", data);
+        console.log("🔍 Data keys:", Object.keys(data || {}));
+        console.log("🔍 Data structure sample:", JSON.stringify(data, null, 2).slice(0, 500));
+      },
+      onError: (error) => {
+        console.error("❌ TimeSeriesData fetch error:", error);
+      }
     }
   );
 
@@ -138,18 +146,30 @@ export default function DashboardPage() {
 
   // Filter time series data based on current selections
   const filteredTimeSeriesData = useMemo(() => {
-    if (!timeSeriesData) return {};
+    if (!timeSeriesData) {
+      console.log("🔍 No timeSeriesData available for filtering");
+      return {};
+    }
+    
+    console.log("🔍 Filtering with selectedParameters:", selectedParameters);
+    console.log("🔍 Available data keys:", Object.keys(timeSeriesData));
+    console.log("🔍 Time range:", timeRange);
     
     const filtered: Record<string, typeof timeSeriesData[string]> = {};
     
     selectedParameters.forEach(param => {
       if (timeSeriesData[param]) {
-        filtered[param] = timeSeriesData[param]!.filter(point => 
+        const dataPoints = timeSeriesData[param]!.filter(point => 
           point.timestamp >= timeRange.start && point.timestamp <= timeRange.end
         );
+        filtered[param] = dataPoints;
+        console.log(`🔍 Filtered ${param}: ${dataPoints.length} points`);
+      } else {
+        console.log(`🔍 Parameter ${param} not found in timeSeriesData`);
       }
     });
     
+    console.log("🔍 Final filtered data keys:", Object.keys(filtered));
     return filtered;
   }, [timeSeriesData, selectedParameters, timeRange]);
 
