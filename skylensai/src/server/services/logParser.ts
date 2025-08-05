@@ -1959,4 +1959,24 @@ export class LogParser {
       });
     }
   }
+
+  /**
+   * Parse log file and return raw message data for inspection
+   */
+  async parseLogFileRaw(filePath: string): Promise<Record<string, LogMessage[]>> {
+    const buffer = fs.readFileSync(filePath);
+    const messages = LogParser.parseBinMessages(buffer);
+    
+    // Group messages by type
+    const messageGroups: Record<string, LogMessage[]> = {};
+    
+    messages.forEach((message: LogMessage) => {
+      if (!messageGroups[message.type]) {
+        messageGroups[message.type] = [];
+      }
+      messageGroups[message.type]!.push(message);
+    });
+    
+    return messageGroups;
+  }
 }

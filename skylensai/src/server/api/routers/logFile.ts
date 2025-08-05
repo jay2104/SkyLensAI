@@ -868,4 +868,59 @@ export const logFileRouter = createTRPCRouter({
         tracked: true,
       };
     }),
+
+  // Get raw parsed data from log file for debugging/inspection
+  getRawParsedData: protectedProcedure
+    .input(
+      z.object({
+        logFileId: z.string().cuid(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      // Get log file info
+      const logFile = await ctx.db.logFile.findFirst({
+        where: {
+          id: input.logFileId,
+          userId: ctx.session.user.id,
+        },
+      });
+
+      if (!logFile) {
+        throw new Error("Log file not found or access denied");
+      }
+
+      if (logFile.uploadStatus !== "PROCESSED") {
+        throw new Error("Log file has not been processed yet");
+      }
+
+      // Parse the log file to get raw message data
+      const parser = new LogParser();
+      const filePath = `uploads/${logFile.userId}/${logFile.id}_${logFile.fileName}`;
+      
+      try {
+        const rawMessages = await parser.parseLogFileRaw(filePath);
+        
+        // Group messages by type and provide samples
+        const messageGroups = Object.entries(rawMessages).map(([messageType, messages]) => {
+          const sortedMessages = messages.sort((a, b) => b.timestamp - a.timestamp);
+          const samples = sortedMessages.slice(0, 5); // Show latest 5 samples
+          const fields = messages.length > 0 ? Object.keys(messages[0]?.data || {}) : [];
+          
+          return {
+            messageType,
+            count: messages.length,
+            samples: samples.map(msg => ({
+              timestamp: msg.timestamp,
+              data: msg.data
+            })),
+            fields
+          };
+        });
+
+        return messageGroups.sort((a, b) => b.count - a.count); // Sort by message count descending
+      } catch (error) {
+        console.error("Failed to parse raw log data:", error);
+        throw new Error("Failed to parse log file for raw data");
+      }
+    }),
 });

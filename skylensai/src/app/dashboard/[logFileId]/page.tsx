@@ -11,6 +11,7 @@ import VirtualExpertPanel from "~/app/_components/VirtualExpertPanel";
 import ParameterCategorySection from "~/app/_components/ParameterCategorySection";
 import DashboardControls from "~/app/_components/DashboardControls";
 import DynamicParameterSection from "~/app/_components/DynamicParameterSection";
+import RawDataViewer from "~/app/_components/RawDataViewer";
 import { type DroneContext } from "~/server/services/openaiService";
 import { Activity, Gauge, Settings, BarChart3 } from "lucide-react";
 
@@ -421,8 +422,14 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          {/* AI Insights Section */}
-          <section>
+          {/* Raw Data Viewer Section */}
+          <RawDataViewer 
+            logFileId={logFileId}
+            className="mb-8"
+          />
+
+          {/* AI Insights Section - HIDDEN */}
+          {/* <section>
             <h2 className="text-2xl font-bold text-slate-900 mb-6">AI-Powered Analysis</h2>
             <AiInsightsCard
               logFileName={dashboardData.fileName}
@@ -461,10 +468,10 @@ export default function DashboardPage() {
               }}
               className="mb-8"
             />
-          </section>
+          </section> */}
 
-          {/* Virtual Expert Section */}
-          <section>
+          {/* Virtual Expert Section - HIDDEN */}
+          {/* <section>
             <h2 className="text-2xl font-bold text-slate-900 mb-6">Virtual Expert</h2>
             <VirtualExpertPanel
               logFileId={logFileId}
@@ -480,7 +487,7 @@ export default function DashboardPage() {
               }}
               className="mb-8"
             />
-          </section>
+          </section> */}
 
           {/* Phase 4: Interactive Dashboard Controls */}
           {timeSeriesData && !timeSeriesError && dashboardData.flightDuration && (
