@@ -21,7 +21,7 @@ export const ARDUPILOT_PARAMETER_MAPPING: ParameterMapping = {
   'battery_remaining': 'battery_remaining',
   
   // Altitude Parameters  
-  'baro_alt': 'altitude_msl',
+  'baro_alt': 'altitude', // Frontend expects 'altitude' 
   'baro_crt': 'climb_rate',
   'baro_press': 'barometric_pressure',
   
@@ -37,10 +37,13 @@ export const ARDUPILOT_PARAMETER_MAPPING: ParameterMapping = {
   'gps_sacc': 'gps_speed_accuracy',
   'gps_vacc': 'gps_vertical_accuracy',
   
-  // Attitude Parameters
-  'roll': 'roll',
-  'pitch': 'pitch', 
-  'yaw': 'yaw',
+  // Attitude Parameters (ArduPilot ATT message)
+  'att_roll': 'roll',  // Frontend expects 'roll'
+  'att_pitch': 'pitch', // Frontend expects 'pitch' 
+  'att_yaw': 'yaw',     // Frontend expects 'yaw'
+  'roll': 'roll',       // If roll exists directly
+  'pitch': 'pitch',     // If pitch exists directly 
+  'yaw': 'yaw',         // If yaw exists directly
   'rollspeed': 'roll_rate',
   'pitchspeed': 'pitch_rate',
   'yawspeed': 'yaw_rate',
