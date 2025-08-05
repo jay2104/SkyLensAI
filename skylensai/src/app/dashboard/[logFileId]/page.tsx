@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState, lazy, Suspense, useMemo } from "react";
+import { useState, lazy, Suspense, useMemo, useEffect } from "react";
 import { api } from "~/trpc/react";
 import DashboardLayout from "~/app/_components/DashboardLayout";
 import HealthMetricCard from "~/app/_components/HealthMetricCard";
@@ -91,16 +91,23 @@ export default function DashboardPage() {
     { 
       enabled: !!logFileId && dashboardData?.uploadStatus === "PROCESSED",
       retry: false,
-      onSuccess: (data) => {
-        console.log("🔍 Frontend received timeSeriesData:", data);
-        console.log("🔍 Data keys:", Object.keys(data || {}));
-        console.log("🔍 Data structure sample:", JSON.stringify(data, null, 2).slice(0, 500));
-      },
-      onError: (error) => {
-        console.error("❌ TimeSeriesData fetch error:", error);
-      }
     }
   );
+
+  // Debug logging for timeSeriesData
+  useEffect(() => {
+    console.log("🔍 TimeSeriesData loading state:", isTimeSeriesLoading);
+    console.log("🔍 TimeSeriesData error:", timeSeriesError);
+    
+    if (timeSeriesData) {
+      console.log("🔍 Frontend received timeSeriesData:", timeSeriesData);
+      console.log("🔍 Data keys:", Object.keys(timeSeriesData || {}));
+      console.log("🔍 Data length per key:", Object.entries(timeSeriesData).map(([key, data]) => [key, data?.length]));
+      console.log("🔍 Data structure sample:", JSON.stringify(timeSeriesData, null, 2).slice(0, 1000));
+    } else {
+      console.log("🔍 No timeSeriesData received yet");
+    }
+  }, [timeSeriesData, timeSeriesError, isTimeSeriesLoading]);
 
   // Fetch AI-enhanced parameter metadata
   const { data: parameterMetadata, isLoading: isParameterMetadataLoading, error: parameterMetadataError } = api.logFile.getParameterMetadata.useQuery(
