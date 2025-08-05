@@ -1961,10 +1961,9 @@ export class LogParser {
   }
 
   /**
-   * Parse log file and return raw message data for inspection
+   * Parse log file buffer and return raw message data for inspection
    */
-  async parseLogFileRaw(filePath: string): Promise<Record<string, LogMessage[]>> {
-    const buffer = fs.readFileSync(filePath);
+  static parseLogFileRawFromBuffer(buffer: Buffer): Record<string, LogMessage[]> {
     const messages = LogParser.parseBinMessages(buffer);
     
     // Group messages by type

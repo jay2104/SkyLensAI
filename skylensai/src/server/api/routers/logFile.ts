@@ -893,12 +893,32 @@ export const logFileRouter = createTRPCRouter({
         throw new Error("Log file has not been processed yet");
       }
 
-      // Parse the log file to get raw message data
-      const parser = new LogParser();
-      const filePath = `uploads/${logFile.userId}/${logFile.id}_${logFile.fileName}`;
+      // Download file from Supabase Storage
+      const { createClient } = await import('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+
+      const filePath = `log-files/${logFile.userId}/${logFile.id}/${logFile.fileName}`;
+      
+      const { data: fileData, error: downloadError } = await supabase.storage
+        .from('log-files')
+        .download(filePath);
+
+      if (downloadError) {
+        console.error(`Supabase download error:`, downloadError);
+        throw new Error(`Failed to download file from storage: ${downloadError.message}`);
+      }
+
+      if (!fileData) {
+        throw new Error("No file data received from storage");
+      }
+
+      const buffer = Buffer.from(await fileData.arrayBuffer());
       
       try {
-        const rawMessages = await parser.parseLogFileRaw(filePath);
+        const rawMessages = LogParser.parseLogFileRawFromBuffer(buffer);
         
         // Group messages by type and provide samples
         const messageGroups = Object.entries(rawMessages).map(([messageType, messages]) => {
