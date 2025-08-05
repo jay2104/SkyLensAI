@@ -138,45 +138,64 @@ export default function DashboardPage() {
 
   // Initialize interactive controls when data loads
   useMemo(() => {
+    console.log("🔍 Initialize controls - timeSeriesData:", !!timeSeriesData, "dashboardData:", !!dashboardData);
+    console.log("🔍 Current selectedParameters length:", selectedParameters.length);
+    console.log("🔍 Current timeRange:", timeRange);
+    
     if (timeSeriesData && dashboardData) {
+      const availableKeys = Object.keys(timeSeriesData);
+      console.log("🔍 Available keys for initialization:", availableKeys);
+      
       // Initialize selected parameters (all available by default)
       if (selectedParameters.length === 0) {
-        setSelectedParameters(Object.keys(timeSeriesData));
+        console.log("🔍 Setting initial selectedParameters to:", availableKeys);
+        setSelectedParameters(availableKeys);
       }
       
       // Initialize time range (full duration by default)  
       if (timeRange.start === 0 && timeRange.end === 0 && dashboardData.flightDuration) {
-        setTimeRange({ start: 0, end: dashboardData.flightDuration });
+        const newTimeRange = { start: 0, end: dashboardData.flightDuration };
+        console.log("🔍 Setting initial timeRange to:", newTimeRange);
+        setTimeRange(newTimeRange);
       }
     }
   }, [timeSeriesData, dashboardData, selectedParameters.length, timeRange]);
 
   // Filter time series data based on current selections
   const filteredTimeSeriesData = useMemo(() => {
+    console.log("🎯 FILTERING START");
+    console.log("🎯 timeSeriesData exists:", !!timeSeriesData);
+    console.log("🎯 selectedParameters:", selectedParameters);
+    console.log("🎯 timeRange:", timeRange);
+    
     if (!timeSeriesData) {
-      console.log("🔍 No timeSeriesData available for filtering");
+      console.log("🎯 No timeSeriesData available for filtering - returning empty object");
       return {};
     }
     
-    console.log("🔍 Filtering with selectedParameters:", selectedParameters);
-    console.log("🔍 Available data keys:", Object.keys(timeSeriesData));
-    console.log("🔍 Time range:", timeRange);
+    const availableKeys = Object.keys(timeSeriesData);
+    console.log("🎯 Available data keys:", availableKeys);
+    console.log("🎯 Data sample:", Object.entries(timeSeriesData).slice(0, 2).map(([key, data]) => [key, data?.slice(0, 2)]));
     
     const filtered: Record<string, typeof timeSeriesData[string]> = {};
     
     selectedParameters.forEach(param => {
       if (timeSeriesData[param]) {
-        const dataPoints = timeSeriesData[param]!.filter(point => 
+        const allDataPoints = timeSeriesData[param]!;
+        console.log(`🎯 ${param}: ${allDataPoints.length} total points`);
+        
+        const dataPoints = allDataPoints.filter(point => 
           point.timestamp >= timeRange.start && point.timestamp <= timeRange.end
         );
         filtered[param] = dataPoints;
-        console.log(`🔍 Filtered ${param}: ${dataPoints.length} points`);
+        console.log(`🎯 ${param}: ${dataPoints.length} points after time filtering (${timeRange.start}-${timeRange.end})`);
       } else {
-        console.log(`🔍 Parameter ${param} not found in timeSeriesData`);
+        console.log(`🎯 Parameter ${param} not found in timeSeriesData`);
       }
     });
     
-    console.log("🔍 Final filtered data keys:", Object.keys(filtered));
+    console.log("🎯 Final filtered data:", Object.entries(filtered).map(([key, data]) => [key, data?.length]));
+    console.log("🎯 FILTERING END");
     return filtered;
   }, [timeSeriesData, selectedParameters, timeRange]);
 
@@ -478,6 +497,15 @@ export default function DashboardPage() {
           )}
 
           {/* AI-Enhanced Dynamic Parameter Analysis */}
+          {(() => {
+            console.log("🚨 UI RENDER CHECK:");
+            console.log("🚨 parameterMetadata exists:", !!parameterMetadata);
+            console.log("🚨 parameterMetadata.categories exists:", !!parameterMetadata?.categories);
+            console.log("🚨 filteredTimeSeriesData exists:", !!filteredTimeSeriesData);
+            console.log("🚨 filteredTimeSeriesData keys count:", Object.keys(filteredTimeSeriesData || {}).length);
+            console.log("🚨 Should show AI section:", !!(parameterMetadata && parameterMetadata.categories && filteredTimeSeriesData && Object.keys(filteredTimeSeriesData).length > 0));
+            return null;
+          })()}
           {parameterMetadata && parameterMetadata.categories && filteredTimeSeriesData && Object.keys(filteredTimeSeriesData).length > 0 && (
             <>
               <section className="mb-8">
@@ -561,6 +589,14 @@ export default function DashboardPage() {
           )}
 
           {/* Fallback: Show traditional parameter view if AI analysis fails */}
+          {(() => {
+            console.log("🔥 FALLBACK CHECK:");
+            console.log("🔥 parameterMetadataError:", !!parameterMetadataError);
+            console.log("🔥 filteredTimeSeriesData exists:", !!filteredTimeSeriesData);
+            console.log("🔥 filteredTimeSeriesData keys count:", Object.keys(filteredTimeSeriesData || {}).length);
+            console.log("🔥 Should show fallback:", !!(parameterMetadataError && filteredTimeSeriesData && Object.keys(filteredTimeSeriesData).length > 0));
+            return null;
+          })()}
           {parameterMetadataError && filteredTimeSeriesData && Object.keys(filteredTimeSeriesData).length > 0 && (
             <section className="mb-8">
               <div className="bg-yellow-50 rounded-lg p-6 border border-yellow-200">
@@ -594,6 +630,13 @@ export default function DashboardPage() {
           )}
 
           {/* No Data After Filtering Message */}
+          {(() => {
+            console.log("💀 NO DATA CHECK:");
+            console.log("💀 timeSeriesData exists:", !!timeSeriesData);
+            console.log("💀 filteredTimeSeriesData keys count:", Object.keys(filteredTimeSeriesData || {}).length);
+            console.log("💀 Should show no data message:", !!(timeSeriesData && Object.keys(filteredTimeSeriesData).length === 0));
+            return null;
+          })()}
           {timeSeriesData && Object.keys(filteredTimeSeriesData).length === 0 && (
             <div className="text-center py-12">
               <BarChart3 className="w-16 h-16 mx-auto mb-4 text-slate-300" />
