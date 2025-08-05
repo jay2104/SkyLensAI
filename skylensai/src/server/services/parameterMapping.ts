@@ -1,10 +1,19 @@
 /**
  * Parameter Mapping System
  * Maps actual ArduPilot parameter names to standardized dashboard names
+ * Updated to work with comprehensive ArduPilot parameter definitions
  */
+
+import { getParameterDefinition, createFallbackParameter, type ParameterDefinition } from './ardupilotParameterDefinitions';
 
 export interface ParameterMapping {
   [actualName: string]: string; // actualName -> standardizedName
+}
+
+export interface EnhancedParameterInfo {
+  originalName: string;
+  standardizedName: string;
+  definition: ParameterDefinition;
 }
 
 /**
@@ -182,4 +191,38 @@ export function createReverseMapping(): Record<string, string[]> {
  */
 export function getStandardizedParameterNames(): string[] {
   return Array.from(new Set(Object.values(ARDUPILOT_PARAMETER_MAPPING)));
+}
+
+/**
+ * Enhanced parameter mapping with full definition lookup
+ */
+export function getEnhancedParameterInfo(actualName: string): EnhancedParameterInfo {
+  // First try direct mapping
+  const standardizedName = mapParameterName(actualName);
+  
+  // Get parameter definition
+  let definition = getParameterDefinition(standardizedName);
+  
+  // If no definition found, try original name
+  if (!definition) {
+    definition = getParameterDefinition(actualName);
+  }
+  
+  // If still no definition, create fallback
+  if (!definition) {
+    definition = createFallbackParameter(standardizedName);
+  }
+  
+  return {
+    originalName: actualName,
+    standardizedName,
+    definition
+  };
+}
+
+/**
+ * Get enhanced parameter info for multiple parameters
+ */
+export function getEnhancedParameterInfoBatch(actualNames: string[]): EnhancedParameterInfo[] {
+  return actualNames.map(name => getEnhancedParameterInfo(name));
 }

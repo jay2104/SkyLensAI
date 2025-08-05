@@ -14,6 +14,10 @@ interface ParameterMetadata {
   chartType: 'line' | 'area' | 'bar' | 'scatter';
   colorHint: string;
   isCore: boolean;
+  minValue?: number;
+  maxValue?: number;
+  decimalPlaces?: number;
+  count: number;
 }
 
 interface ParameterCategory {
@@ -233,6 +237,9 @@ export default function DynamicParameterSection({
                       parameter={paramName}
                       color={param.colorHint}
                       chartType={param.chartType}
+                      decimalPlaces={param.decimalPlaces}
+                      minValue={param.minValue}
+                      maxValue={param.maxValue}
                     />
                   </div>
                 );

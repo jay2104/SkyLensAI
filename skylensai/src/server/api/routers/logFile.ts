@@ -9,7 +9,7 @@ import {
 import { LogParser } from "~/server/services/logParser";
 import { ChartRenderer } from "~/server/services/chartRenderer";
 import { TrendAnalyzer } from "~/server/services/trendAnalyzer";
-import { ParameterIntelligenceService } from "~/server/services/parameterIntelligence";
+import { ParameterIntelligenceService } from "~/server/services/documentationBasedParameterService";
 
 export const logFileRouter = createTRPCRouter({
   // Get presigned upload URL for file uploads
@@ -455,22 +455,20 @@ export const logFileRouter = createTRPCRouter({
       );
 
       try {
-        // Use AI to analyze and enhance parameter metadata
+        // Use documentation-based analysis to enhance parameter metadata
         const enhancedMetadata = await ParameterIntelligenceService.analyzeParameters(
           parametersWithSamples.map(p => ({
             parameter: p.parameter,
             unit: p.unit,
+            count: p.count,
             sampleValues: p.sampleValues,
           }))
         );
 
-        // Organize into intelligent categories
-        const categories = ParameterIntelligenceService.categorizeParameters(enhancedMetadata);
-
         return {
-          categories,
-          totalParameters: uniqueParams.length,
-          aiEnhanced: true,
+          categories: enhancedMetadata.categories,
+          totalParameters: enhancedMetadata.totalParameters,
+          documentationBased: enhancedMetadata.documentationBased,
         };
 
       } catch (error) {
@@ -484,7 +482,7 @@ export const logFileRouter = createTRPCRouter({
           description: `${p.parameter} telemetry data`,
           priority: 3,
           unit: p.unit,
-          chartType: 'line' as const,
+          chartType: 'line' as 'line' | 'area' | 'bar' | 'scatter',
           colorHint: '#6b7280',
           isCore: false,
           count: p.count,
