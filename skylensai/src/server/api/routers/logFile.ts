@@ -10,6 +10,14 @@ import { LogParser } from "~/server/services/logParser";
 import { ChartRenderer } from "~/server/services/chartRenderer";
 import { TrendAnalyzer } from "~/server/services/trendAnalyzer";
 import { ParameterIntelligenceService } from "~/server/services/documentationBasedParameterService";
+import { 
+  getParameterMapping, 
+  getParameterMappingBatch, 
+  getCoreParameterMappings,
+  getParameterMappingsByCategory,
+  getParameterMappingStats,
+  validateTimeSeriesData
+} from "~/server/services/parameterMappingService";
 
 export const logFileRouter = createTRPCRouter({
   // Get presigned upload URL for file uploads
@@ -1013,5 +1021,70 @@ export const logFileRouter = createTRPCRouter({
         console.error("Failed to parse vehicle parameters:", error);
         throw new Error("Failed to parse log file for vehicle parameters");
       }
+    }),
+
+  // Parameter Mapping Knowledge Base API Endpoints
+  
+  // Get parameter mapping for a single parameter
+  getParameterMapping: publicProcedure
+    .input(z.object({ 
+      parameterName: z.string().min(1) 
+    }))
+    .query(({ input }) => {
+      return getParameterMapping(input.parameterName);
+    }),
+
+  // Get parameter mappings for multiple parameters
+  getParameterMappingBatch: publicProcedure
+    .input(z.object({ 
+      parameterNames: z.array(z.string()) 
+    }))
+    .query(({ input }) => {
+      return getParameterMappingBatch(input.parameterNames);
+    }),
+
+  // Get core parameters for preset graphs
+  getCoreParameterMappings: publicProcedure
+    .query(() => {
+      return getCoreParameterMappings();
+    }),
+
+  // Get parameters by category
+  getParameterMappingsByCategory: publicProcedure
+    .input(z.object({ 
+      category: z.string() 
+    }))
+    .query(({ input }) => {
+      return getParameterMappingsByCategory(input.category);
+    }),
+
+  // Get parameter mapping statistics
+  getParameterMappingStats: publicProcedure
+    .query(() => {
+      return getParameterMappingStats();
+    }),
+
+  // Validate time series data against parameter mappings
+  validateParameterMappings: protectedProcedure
+    .input(z.object({ 
+      logFileId: z.string().cuid() 
+    }))
+    .query(async ({ ctx, input }) => {
+      // Get time series data for this log file
+      const timeSeriesData = await ctx.db.timeSeriesPoint.findMany({
+        where: { logFileId: input.logFileId },
+        select: { parameter: true }
+      });
+
+      // Group by parameter name
+      const parameterData: Record<string, any[]> = {};
+      timeSeriesData.forEach(point => {
+        if (!parameterData[point.parameter]) {
+          parameterData[point.parameter] = [];
+        }
+        parameterData[point.parameter]!.push(point);
+      });
+
+      return validateTimeSeriesData(parameterData);
     }),
 });

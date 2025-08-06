@@ -1,7 +1,7 @@
 import { LogFileType } from "@prisma/client";
 import { db } from "~/server/db";
 import fs from "fs";
-import { mapParameterName } from "./parameterMapping";
+import { mapRawToInternal } from "./parameterMappingService";
 
 // Enhanced type definitions for comprehensive log parsing
 interface FormatMessage {
@@ -978,8 +978,8 @@ export class LogParser {
       return; // Skip invalid metadata silently
     }
     
-    // Map parameter name to standardized version for dashboard compatibility
-    const mappedParameter = mapParameterName(parameter);
+    // Map parameter name to internal API name for consistency
+    const mappedParameter = mapRawToInternal(parameter);
     
     timeSeriesData.push({
       parameter: mappedParameter,
