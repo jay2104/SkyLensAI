@@ -134,15 +134,44 @@ interface PresetGraphsSectionProps {
 }
 
 export default function PresetGraphsSection({ timeSeriesData, className = "" }: PresetGraphsSectionProps) {
-  // Filter presets to only show those with available data
-  const availablePresets = PRESET_GRAPHS.filter(preset => 
-    preset.parameters.some(param => timeSeriesData[param] && timeSeriesData[param].length > 0)
-  );
+  // Debug logging
+  console.log("🔍 PresetGraphsSection - Available data keys:", Object.keys(timeSeriesData || {}));
+  console.log("🔍 PresetGraphsSection - Data sample:", Object.entries(timeSeriesData || {}).slice(0, 3).map(([key, data]) => [key, data?.length]));
+
+  // Filter presets to only show those with available data (more flexible matching)
+  const availablePresets = PRESET_GRAPHS.filter(preset => {
+    const hasData = preset.parameters.some(param => {
+      const hasExactMatch = timeSeriesData[param] && timeSeriesData[param].length > 0;
+      // Also check for common parameter name variations
+      const variations = [
+        param,
+        param.toLowerCase(),
+        param.toUpperCase(),
+        param.replace(/_/g, ''),
+        param.replace(/_/g, '.'),
+      ];
+      const hasVariationMatch = variations.some(variation => 
+        timeSeriesData[variation] && timeSeriesData[variation].length > 0
+      );
+      return hasExactMatch || hasVariationMatch;
+    });
+    
+    if (hasData) {
+      console.log("✅ Preset available:", preset.title, "- parameters:", preset.parameters);
+    } else {
+      console.log("❌ Preset unavailable:", preset.title, "- parameters:", preset.parameters);
+    }
+    
+    return hasData;
+  });
 
   // Sort by priority and take top 8 presets
   const topPresets = availablePresets
     .sort((a, b) => a.priority - b.priority)
     .slice(0, 8);
+    
+  console.log("📊 Final topPresets count:", topPresets.length);
+  console.log("📊 topPresets:", topPresets.map(p => p.title));
 
   const getCategoryStyle = (category: PresetGraph['category']) => {
     switch (category) {
@@ -170,15 +199,81 @@ export default function PresetGraphsSection({ timeSeriesData, className = "" }: 
     }
   };
 
+  // If no presets match, create dynamic graphs from available data
   if (topPresets.length === 0) {
+    const availableDataKeys = Object.keys(timeSeriesData || {}).filter(key => 
+      timeSeriesData[key] && timeSeriesData[key].length > 0
+    );
+    
+    if (availableDataKeys.length === 0) {
+      return (
+        <div className={`text-center py-12 ${className}`}>
+          <BarChart3 className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+          <h3 className="text-xl font-semibold text-slate-900 mb-2">No Data Available</h3>
+          <p className="text-slate-600">
+            No flight data found in your log file for visualization.
+          </p>
+        </div>
+      );
+    }
+    
+    // Create fallback graphs from available data (top 8 parameters)
+    const fallbackGraphs = availableDataKeys.slice(0, 8);
+    
     return (
-      <div className={`text-center py-12 ${className}`}>
-        <BarChart3 className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-        <h3 className="text-xl font-semibold text-slate-900 mb-2">No Data Available</h3>
-        <p className="text-slate-600">
-          No compatible parameters found in your log file for preset graphs.
-        </p>
-      </div>
+      <section className={className}>
+        <div className="mb-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">Flight Data Overview</h2>
+              <p className="text-slate-600">
+                Showing available flight parameters from your log file ({fallbackGraphs.length} graphs)
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-blue-600">
+                {fallbackGraphs.length}
+              </div>
+              <div className="text-sm text-slate-500">
+                Parameters
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {fallbackGraphs.map((param, index) => (
+            <div key={param} className="bg-white rounded-lg border border-slate-200 p-6">
+              <h3 className="font-semibold text-slate-900 mb-4">
+                {param.replace(/_/g, ' ').toUpperCase()}
+              </h3>
+              <p className="text-sm text-slate-600 mb-4">
+                {(timeSeriesData[param] || []).length.toLocaleString()} data points
+              </p>
+              <Suspense fallback={<ChartSkeleton />}>
+                <FlightChart
+                  title={param}
+                  data={timeSeriesData[param] || []}
+                  parameter={param}
+                  color={(['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#84cc16', '#f97316', '#dc2626'][index % 8]) || '#3b82f6'}
+                  height={200}
+                />
+              </Suspense>
+            </div>
+          ))}
+        </div>
+        
+        <div className="mt-8 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+          <div className="flex items-center space-x-2 mb-2">
+            <BarChart3 className="w-5 h-5 text-yellow-600" />
+            <h4 className="font-medium text-yellow-900">Custom Parameter View</h4>
+          </div>
+          <p className="text-sm text-yellow-700">
+            No preset graph matches were found for your log file parameters. Showing available flight data instead. 
+            For advanced plotting and analysis, use the <strong>Charts</strong> menu for full control.
+          </p>
+        </div>
+      </section>
     );
   }
 
@@ -205,16 +300,44 @@ export default function PresetGraphsSection({ timeSeriesData, className = "" }: 
       </div>
 
       {/* Preset Graphs Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {topPresets.map((preset) => {
           const Icon = preset.icon;
           
-          // Get data for available parameters only
-          const availableParams = preset.parameters.filter(param => 
-            timeSeriesData[param] && timeSeriesData[param].length > 0
-          );
+          // Get data for available parameters only (with flexible matching)
+          const availableParams = preset.parameters.filter(param => {
+            // Check exact match first
+            if (timeSeriesData[param] && timeSeriesData[param].length > 0) return true;
+            
+            // Check variations
+            const variations = [
+              param.toLowerCase(),
+              param.toUpperCase(),
+              param.replace(/_/g, ''),
+              param.replace(/_/g, '.'),
+            ];
+            
+            return variations.some(variation => 
+              timeSeriesData[variation] && timeSeriesData[variation].length > 0
+            );
+          });
           
-          if (availableParams.length === 0) return null;
+          // Get the actual parameter names that exist in the data
+          const realParamNames = preset.parameters.map(param => {
+            if (timeSeriesData[param]) return param;
+            
+            const variations = [
+              param.toLowerCase(),
+              param.toUpperCase(),
+              param.replace(/_/g, ''),
+              param.replace(/_/g, '.'),
+            ];
+            
+            const found = variations.find(variation => timeSeriesData[variation]);
+            return found || param;
+          }).filter(param => timeSeriesData[param] && timeSeriesData[param].length > 0);
+          
+          if (realParamNames.length === 0) return null;
 
           return (
             <div
@@ -240,26 +363,26 @@ export default function PresetGraphsSection({ timeSeriesData, className = "" }: 
                 
                 {/* Parameter Count */}
                 <div className="text-xs text-slate-500">
-                  Showing {availableParams.length} of {preset.parameters.length} parameters
+                  Showing {realParamNames.length} of {preset.parameters.length} parameters
                 </div>
               </div>
 
               {/* Chart Content */}
               <div className="px-6 pb-6">
                 <Suspense fallback={<ChartSkeleton />}>
-                  {availableParams.length === 1 ? (
+                  {realParamNames.length === 1 ? (
                     // Single parameter chart
                     <FlightChart
                       title={preset.title}
-                      data={timeSeriesData[availableParams[0]!] || []}
-                      parameter={availableParams[0]!}
+                      data={timeSeriesData[realParamNames[0]!] || []}
+                      parameter={realParamNames[0]!}
                       color={preset.colors[0] || '#3b82f6'}
                       height={200}
                     />
                   ) : (
                     // Multi-parameter chart
                     <div className="space-y-3">
-                      {availableParams.map((param, index) => (
+                      {realParamNames.map((param, index) => (
                         <FlightChart
                           key={param}
                           title={param.replace(/_/g, ' ').toUpperCase()}
