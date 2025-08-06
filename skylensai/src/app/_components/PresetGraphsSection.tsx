@@ -23,7 +23,7 @@ const PRESET_GRAPHS: PresetGraph[] = [
     title: 'Altitude Profile',
     description: 'Flight altitude over time - essential safety metric',
     icon: TrendingUp,
-    parameters: ['altitude', 'gps_alt'],
+    parameters: ['baro_altitude', 'gps_altitude', 'altitude', 'gps_alt'],
     chartType: 'area',
     priority: 1,
     category: 'critical',
@@ -34,7 +34,7 @@ const PRESET_GRAPHS: PresetGraph[] = [
     title: 'Attitude Control',
     description: 'Roll, pitch, yaw stability analysis',
     icon: Navigation,
-    parameters: ['roll', 'pitch', 'yaw'],
+    parameters: ['ntun_roll', 'ntun_pitch', 'ntun_yaw', 'roll', 'pitch', 'yaw'],
     chartType: 'line',
     priority: 1,
     category: 'critical',
@@ -45,29 +45,29 @@ const PRESET_GRAPHS: PresetGraph[] = [
     title: 'Battery Performance',
     description: 'Power system health and consumption',
     icon: Battery,
-    parameters: ['battery_voltage', 'battery_current'],
+    parameters: ['battery_voltage', 'battery_current', 'battery_consumed'],
     chartType: 'line',
     priority: 1,
     category: 'critical',
-    colors: ['#f59e0b', '#d97706']
+    colors: ['#f59e0b', '#d97706', '#92400e']
   },
   {
     id: 'gps-quality',
     title: 'GPS Quality',
     description: 'Navigation accuracy and satellite health',
     icon: Navigation,
-    parameters: ['gps_hdop', 'gps_vdop'],
+    parameters: ['gpa_hdop', 'gpa_vdop', 'gps_hdop', 'gps_vdop', 'gps_satellites'],
     chartType: 'line',
     priority: 2,
     category: 'monitoring',
-    colors: ['#34d399', '#6ee7b7']
+    colors: ['#34d399', '#6ee7b7', '#10b981']
   },
   {
     id: 'motor-balance',
     title: 'Motor Output Balance',
     description: 'Propulsion system symmetry analysis',
     icon: Settings,
-    parameters: ['motor_1', 'motor_2', 'motor_3', 'motor_4'],
+    parameters: ['servo_output_1', 'servo_output_2', 'servo_output_3', 'servo_output_4', 'motor_1', 'motor_2', 'motor_3', 'motor_4'],
     chartType: 'line',
     priority: 2,
     category: 'monitoring',
@@ -78,18 +78,18 @@ const PRESET_GRAPHS: PresetGraph[] = [
     title: 'Control Response',
     description: 'Input vs output response analysis',
     icon: Settings,
-    parameters: ['rc_throttle', 'rc_roll', 'rc_pitch'],
+    parameters: ['rc_input_throttle', 'rc_input_roll', 'rc_input_pitch', 'rc_input_yaw', 'rc_throttle', 'rc_roll', 'rc_pitch'],
     chartType: 'line',
     priority: 2,
     category: 'analysis',
-    colors: ['#8b5cf6', '#7c3aed', '#6d28d9']
+    colors: ['#8b5cf6', '#7c3aed', '#6d28d9', '#5b21b6']
   },
   {
     id: 'vibration-health',
     title: 'Vibration Analysis',
     description: 'Mechanical health and stability indicators',
     icon: AlertTriangle,
-    parameters: ['vibration_x', 'vibration_y', 'vibration_z'],
+    parameters: ['vibe_x', 'vibe_y', 'vibe_z', 'vibration_x', 'vibration_y', 'vibration_z'],
     chartType: 'line',
     priority: 2,
     category: 'monitoring',
@@ -100,11 +100,33 @@ const PRESET_GRAPHS: PresetGraph[] = [
     title: 'System Performance',
     description: 'Flight controller load and efficiency',
     icon: Cpu,
-    parameters: ['cpu_load', 'memory_usage'],
+    parameters: ['pm_load', 'pm_task', 'cpu_load', 'memory_usage'],
+    chartType: 'line',
+    priority: 2,
+    category: 'analysis',
+    colors: ['#84cc16', '#65a30d']
+  },
+  {
+    id: 'imu-sensors',
+    title: 'IMU Sensor Data',
+    description: 'Inertial measurement unit readings',
+    icon: Cpu,
+    parameters: ['imu_accel_x', 'imu_accel_y', 'imu_accel_z', 'imu_gyro_x', 'imu_gyro_y'],
     chartType: 'line',
     priority: 3,
     category: 'analysis',
-    colors: ['#84cc16', '#65a30d']
+    colors: ['#06b6d4', '#0891b2', '#0e7490', '#155e75', '#164e63']
+  },
+  {
+    id: 'magnetometer',
+    title: 'Magnetometer Data',
+    description: 'Compass and magnetic field measurements',
+    icon: Navigation,
+    parameters: ['mag_x', 'mag_y', 'mag_z', 'magnetometer_x', 'magnetometer_y', 'magnetometer_z'],
+    chartType: 'line',
+    priority: 3,
+    category: 'analysis',
+    colors: ['#06b6d4', '#0891b2', '#0e7490']
   }
 ];
 
@@ -134,44 +156,41 @@ interface PresetGraphsSectionProps {
 }
 
 export default function PresetGraphsSection({ timeSeriesData, className = "" }: PresetGraphsSectionProps) {
-  // Debug logging
-  console.log("🔍 PresetGraphsSection - Available data keys:", Object.keys(timeSeriesData || {}));
-  console.log("🔍 PresetGraphsSection - Data sample:", Object.entries(timeSeriesData || {}).slice(0, 3).map(([key, data]) => [key, data?.length]));
-
-  // Filter presets to only show those with available data (more flexible matching)
+  // Enhanced debug logging
+  const dataKeys = Object.keys(timeSeriesData || {});
+  console.log("🔍 PresetGraphsSection DEBUGGING:");
+  console.log("🔍 Total available data keys:", dataKeys.length);
+  console.log("🔍 Available data keys:", dataKeys);
+  console.log("🔍 Data samples:", Object.entries(timeSeriesData || {}).slice(0, 5).map(([key, data]) => [key, `${data?.length || 0} points`]));
+  
+  // Filter presets to only show those with available data (simplified matching)
   const availablePresets = PRESET_GRAPHS.filter(preset => {
     const hasData = preset.parameters.some(param => {
-      const hasExactMatch = timeSeriesData[param] && timeSeriesData[param].length > 0;
-      // Also check for common parameter name variations
-      const variations = [
-        param,
-        param.toLowerCase(),
-        param.toUpperCase(),
-        param.replace(/_/g, ''),
-        param.replace(/_/g, '.'),
-      ];
-      const hasVariationMatch = variations.some(variation => 
-        timeSeriesData[variation] && timeSeriesData[variation].length > 0
-      );
-      return hasExactMatch || hasVariationMatch;
+      const exists = timeSeriesData[param] && timeSeriesData[param].length > 0;
+      if (exists) {
+        console.log(`✅ Found parameter: ${param} with ${timeSeriesData[param]?.length || 0} points`);
+      }
+      return exists;
     });
     
-    if (hasData) {
-      console.log("✅ Preset available:", preset.title, "- parameters:", preset.parameters);
-    } else {
-      console.log("❌ Preset unavailable:", preset.title, "- parameters:", preset.parameters);
-    }
-    
+    console.log(`${hasData ? '✅' : '❌'} Preset "${preset.title}": ${hasData ? 'AVAILABLE' : 'unavailable'} - checking parameters:`, preset.parameters);
     return hasData;
   });
 
-  // Sort by priority and take top 8 presets
+  // Sort by priority and take more presets
   const topPresets = availablePresets
     .sort((a, b) => a.priority - b.priority)
-    .slice(0, 8);
+    .slice(0, 10); // Increased from 8 to 10
     
-  console.log("📊 Final topPresets count:", topPresets.length);
-  console.log("📊 topPresets:", topPresets.map(p => p.title));
+  console.log("📊 FINAL RESULTS:");
+  console.log("📊 Available presets:", availablePresets.length);
+  console.log("📊 Top presets selected:", topPresets.length);
+  console.log("📊 Selected preset titles:", topPresets.map(p => p.title));
+  
+  // Force fallback if less than 3 presets found
+  if (topPresets.length < 3) {
+    console.log("🚨 Too few presets found, forcing fallback system");
+  }
 
   const getCategoryStyle = (category: PresetGraph['category']) => {
     switch (category) {
@@ -199,8 +218,8 @@ export default function PresetGraphsSection({ timeSeriesData, className = "" }: 
     }
   };
 
-  // If no presets match, create dynamic graphs from available data
-  if (topPresets.length === 0) {
+  // If too few presets match, create dynamic graphs from available data
+  if (topPresets.length < 3) {
     const availableDataKeys = Object.keys(timeSeriesData || {}).filter(key => 
       timeSeriesData[key] && timeSeriesData[key].length > 0
     );
@@ -217,8 +236,11 @@ export default function PresetGraphsSection({ timeSeriesData, className = "" }: 
       );
     }
     
-    // Create fallback graphs from available data (top 8 parameters)
-    const fallbackGraphs = availableDataKeys.slice(0, 8);
+    // Create fallback graphs from available data (top 12 parameters)
+    const fallbackGraphs = availableDataKeys.slice(0, 12);
+    
+    console.log("🔄 FALLBACK MODE ACTIVATED");
+    console.log("🔄 Creating graphs for:", fallbackGraphs);
     
     return (
       <section className={className}>
@@ -241,7 +263,7 @@ export default function PresetGraphsSection({ timeSeriesData, className = "" }: 
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           {fallbackGraphs.map((param, index) => (
             <div key={param} className="bg-white rounded-lg border border-slate-200 p-6">
               <h3 className="font-semibold text-slate-900 mb-4">
