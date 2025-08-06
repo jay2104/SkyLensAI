@@ -697,14 +697,18 @@ export function createRawToInternalMapping(): Record<string, string> {
   
   ARDUPILOT_LOG_MESSAGES.forEach(message => {
     message.fields.forEach(field => {
-      // Support both MESSAGE.FIELD format and direct field format
-      const rawKey1 = `${message.messageType.toLowerCase()}_${field.rawName.toLowerCase()}`;
-      const rawKey2 = `${message.messageType}_${field.rawName}`;
-      const rawKey3 = field.rawName.toLowerCase();
+      // Support multiple ArduPilot field naming formats
+      const rawKey1 = `${message.messageType.toLowerCase()}_${field.rawName.toLowerCase()}`;  // gps_lat
+      const rawKey2 = `${message.messageType}_${field.rawName}`;                              // GPS_Lat
+      const rawKey3 = field.rawName.toLowerCase();                                           // lat
+      const rawKey4 = `${message.messageType}.${field.rawName}`;                             // GPS.Lat (dot notation)
+      const rawKey5 = `${message.messageType.toLowerCase()}.${field.rawName.toLowerCase()}`; // gps.lat
       
       mapping[rawKey1] = field.internalName;
       mapping[rawKey2] = field.internalName;
       mapping[rawKey3] = field.internalName;
+      mapping[rawKey4] = field.internalName;
+      mapping[rawKey5] = field.internalName;
     });
   });
   

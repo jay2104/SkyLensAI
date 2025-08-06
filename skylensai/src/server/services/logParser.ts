@@ -1038,15 +1038,15 @@ export class LogParser {
     messageGroups.gps.forEach(m => {
       const timestamp = m.timestamp;
       
-      // Use safe helper for GPS data with proper validation
-      this.addTimeSeriesPoint(timeSeriesData, 'gps_lat', timestamp, 
+      // Use ArduPilot raw field names for proper parameter mapping
+      this.addTimeSeriesPoint(timeSeriesData, 'GPS.Lat', timestamp, 
         typeof m.data['Lat'] === 'number' ? m.data['Lat'] / 10000000 : undefined, 'degrees');
-      this.addTimeSeriesPoint(timeSeriesData, 'gps_lng', timestamp, 
+      this.addTimeSeriesPoint(timeSeriesData, 'GPS.Lng', timestamp, 
         typeof m.data['Lng'] === 'number' ? m.data['Lng'] / 10000000 : undefined, 'degrees');
       
-      // Check multiple altitude field names with safe conversion
+      // GPS altitude using proper raw field name
       const altValue = m.data['Alt'] || m.data['RelAlt'] || m.data['RAlt'] || m.data['GAlt'];
-      this.addTimeSeriesPoint(timeSeriesData, 'altitude', timestamp, 
+      this.addTimeSeriesPoint(timeSeriesData, 'GPS.Alt', timestamp, 
         typeof altValue === 'number' ? altValue / 100 : undefined, 'meters');
     });
     
@@ -1054,15 +1054,15 @@ export class LogParser {
     messageGroups.attitude.forEach(m => {
       const timestamp = m.timestamp;
       
-      // Enhanced attitude parameters with safe conversion
+      // Use ArduPilot raw field names for proper parameter mapping
       ['Roll', 'Pitch', 'Yaw', 'DesRoll', 'DesPitch', 'DesYaw'].forEach(param => {
-        this.addTimeSeriesPoint(timeSeriesData, param.toLowerCase(), timestamp,
+        this.addTimeSeriesPoint(timeSeriesData, `ATT.${param}`, timestamp,
           typeof m.data[param] === 'number' ? m.data[param] / 100 : undefined, 'degrees');
       });
       
-      // Error parameters with safe conversion
+      // Error parameters with proper raw field names
       ['ErrRP', 'ErrYaw'].forEach(param => {
-        this.addTimeSeriesPoint(timeSeriesData, param.toLowerCase(), timestamp,
+        this.addTimeSeriesPoint(timeSeriesData, `ATT.${param}`, timestamp,
           typeof m.data[param] === 'number' ? m.data[param] / 100 : undefined, 'degrees');
       });
     });
@@ -1137,18 +1137,12 @@ export class LogParser {
       
       const baroParams = ['Alt', 'Press', 'Temp', 'CRt'];
       baroParams.forEach(param => {
-        if (typeof m.data[param] === 'number') {
-          const unit = param === 'Alt' ? 'meters' :
-                      param === 'Press' ? 'pascals' :
-                      param === 'Temp' ? 'celsius' :
-                      param === 'CRt' ? 'm/s' : 'units';
-          timeSeriesData.push({
-            parameter: `baro_${param.toLowerCase()}`,
-            timestamp,
-            value: m.data[param],
-            unit
-          });
-        }
+        const unit = param === 'Alt' ? 'meters' :
+                    param === 'Press' ? 'pascals' :
+                    param === 'Temp' ? 'celsius' :
+                    param === 'CRt' ? 'm/s' : 'units';
+        // Use ArduPilot raw field names for proper parameter mapping
+        this.addTimeSeriesPoint(timeSeriesData, `BARO.${param}`, timestamp, m.data[param], unit);
       });
     });
     
@@ -1256,20 +1250,18 @@ export class LogParser {
     messageGroups.battery.forEach(m => {
       const timestamp = m.timestamp;
       
-      // Enhanced battery parameters
+      // Use ArduPilot raw field names for proper parameter mapping
       ['Volt', 'VoltR', 'Curr', 'CurrTot', 'Capacity', 'VCC'].forEach(param => {
         if (typeof m.data[param] === 'number') {
           const unit = param.includes('Volt') || param === 'VCC' ? 'volts' :
                       param.includes('Curr') ? 'amps' :
                       param === 'Capacity' ? 'mAh' : 'units';
-          timeSeriesData.push({
-            parameter: `battery_${param.toLowerCase()}`,
-            timestamp,
-            value: param.includes('Volt') || param === 'VCC' ? m.data[param] / 100 :
-                   param.includes('Curr') ? m.data[param] / 100 :
-                   m.data[param],
-            unit
-          });
+          const value = param.includes('Volt') || param === 'VCC' ? m.data[param] / 100 :
+                       param.includes('Curr') ? m.data[param] / 100 :
+                       m.data[param];
+          // Determine message type for proper field naming
+          const messagePrefix = m.type === 'CURR' ? 'CURR' : 'BAT';
+          this.addTimeSeriesPoint(timeSeriesData, `${messagePrefix}.${param}`, timestamp, value, unit);
         }
       });
     });
