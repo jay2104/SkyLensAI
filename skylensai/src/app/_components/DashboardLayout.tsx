@@ -68,12 +68,12 @@ export default function DashboardLayout({
               {navItems.map((item) => {
                 const Icon = item.icon;
                 
-                // Special handling for Raw Data link
-                if (item.id === "raw-data" && logFileId) {
+                // Special handling for Raw Data and Charts links
+                if ((item.id === "raw-data" || item.id === "charts") && logFileId) {
                   return (
                     <Link
                       key={item.id}
-                      href={`/dashboard/${logFileId}/raw-data`}
+                      href={`/dashboard/${logFileId}/${item.id === "charts" ? "charts" : "raw-data"}`}
                       className={`px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center space-x-2 ${
                         item.active
                           ? "bg-blue-100 text-blue-700"
@@ -151,12 +151,12 @@ export default function DashboardLayout({
               {navItems.map((item) => {
                 const Icon = item.icon;
                 
-                // Special handling for Raw Data link
-                if (item.id === "raw-data" && logFileId) {
+                // Special handling for Raw Data and Charts links
+                if ((item.id === "raw-data" || item.id === "charts") && logFileId) {
                   return (
                     <Link
                       key={item.id}
-                      href={`/dashboard/${logFileId}/raw-data`}
+                      href={`/dashboard/${logFileId}/${item.id === "charts" ? "charts" : "raw-data"}`}
                       className={`w-full text-left px-3 py-2 rounded-md text-base font-medium transition-colors flex items-center space-x-3 ${
                         item.active
                           ? "bg-blue-100 text-blue-700"

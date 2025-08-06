@@ -11,6 +11,7 @@ import VirtualExpertPanel from "~/app/_components/VirtualExpertPanel";
 import ParameterCategorySection from "~/app/_components/ParameterCategorySection";
 import DashboardControls from "~/app/_components/DashboardControls";
 import DynamicParameterSection from "~/app/_components/DynamicParameterSection";
+import PresetGraphsSection from "~/app/_components/PresetGraphsSection";
 import ParametersSidebar from "~/app/_components/ParametersSidebar";
 import { type DroneContext } from "~/server/services/openaiService";
 import { Activity, Gauge, Settings, BarChart3 } from "lucide-react";
@@ -489,177 +490,80 @@ export default function DashboardPage() {
             />
           </section> */}
 
-          {/* Phase 4: Interactive Dashboard Controls */}
-          {timeSeriesData && !timeSeriesError && dashboardData.flightDuration && (
-            <DashboardControls
+          {/* Preset Graphs Section - Main Dashboard Highlights */}
+          {timeSeriesData && !timeSeriesError && (
+            <PresetGraphsSection
               timeSeriesData={timeSeriesData}
-              selectedParameters={selectedParameters}
-              onParameterChange={setSelectedParameters}
-              timeRange={timeRange}
-              onTimeRangeChange={setTimeRange}
-              totalDuration={dashboardData.flightDuration}
-              onExport={handleEnhancedExport}
               className="mb-8"
             />
           )}
 
-          {/* AI-Enhanced Dynamic Parameter Analysis */}
-          {(() => {
-            console.log("🚨 UI RENDER CHECK:");
-            console.log("🚨 parameterMetadata exists:", !!parameterMetadata);
-            console.log("🚨 parameterMetadata.categories exists:", !!parameterMetadata?.categories);
-            console.log("🚨 filteredTimeSeriesData exists:", !!filteredTimeSeriesData);
-            console.log("🚨 filteredTimeSeriesData keys count:", Object.keys(filteredTimeSeriesData || {}).length);
-            console.log("🚨 Should show AI section:", !!(parameterMetadata && parameterMetadata.categories && filteredTimeSeriesData && Object.keys(filteredTimeSeriesData).length > 0));
-            return null;
-          })()}
-          {parameterMetadata && parameterMetadata.categories && filteredTimeSeriesData && Object.keys(filteredTimeSeriesData).length > 0 && (
-            <>
-              <section className="mb-8">
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-100">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h2 className="text-2xl font-bold text-slate-900 mb-2">
-                        🧠 AI-Enhanced Parameter Analysis
-                      </h2>
-                      <p className="text-slate-600">
-                        Intelligent categorization and analysis of {parameterMetadata.totalParameters} flight parameters
-                        {parameterMetadata.aiEnhanced && " using AI inference"}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-blue-600">
-                        {parameterMetadata.totalParameters}
-                      </div>
-                      <div className="text-sm text-slate-500">
-                        Parameters
-                      </div>
-                    </div>
+          {/* Advanced Charts Call-to-Action */}
+          <section className="mb-8">
+            <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border border-purple-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="p-3 bg-purple-100 rounded-lg">
+                    <BarChart3 className="w-8 h-8 text-purple-600" />
                   </div>
-                  {parameterMetadata.aiEnhanced && (
-                    <div className="mt-3 text-sm text-blue-700">
-                      ✨ Parameters analyzed with AI to provide human-readable names and intelligent categorization
-                    </div>
-                  )}
+                  <div>
+                    <h3 className="text-xl font-semibold text-slate-900 mb-1">
+                      Need More Control?
+                    </h3>
+                    <p className="text-slate-600">
+                      Use our advanced Charts tool for custom plotting, parameter selection, and detailed analysis
+                    </p>
+                  </div>
                 </div>
-              </section>
-
-              {/* Dynamic Parameter Categories */}
-              {parameterMetadata.categories.map((category, index) => (
-                <DynamicParameterSection
-                  key={category.name}
-                  category={category}
-                  timeSeriesData={filteredTimeSeriesData}
-                  className="mb-8"
-                />
-              ))}
-
-              {/* GPS Map Section (if GPS data exists) */}
-              {(() => {
-                // Look for GPS parameters in any category
-                const gpsLatParam = parameterMetadata.categories
-                  .flatMap(c => c.parameters)
-                  .find(p => p.parameter.toLowerCase().includes('lat') || p.displayName.toLowerCase().includes('latitude'));
-                const gpsLngParam = parameterMetadata.categories
-                  .flatMap(c => c.parameters)
-                  .find(p => p.parameter.toLowerCase().includes('lng') || p.parameter.toLowerCase().includes('lon') || p.displayName.toLowerCase().includes('longitude'));
-                const altParam = parameterMetadata.categories
-                  .flatMap(c => c.parameters)
-                  .find(p => p.parameter.toLowerCase().includes('alt') || p.displayName.toLowerCase().includes('altitude'));
-
-                const gpsLatData = gpsLatParam ? filteredTimeSeriesData[gpsLatParam.parameter] : null;
-                const gpsLngData = gpsLngParam ? filteredTimeSeriesData[gpsLngParam.parameter] : null;
-                const altitudeData = altParam ? filteredTimeSeriesData[altParam.parameter] : null;
-
-                if (gpsLatData && gpsLngData && gpsLatData.length > 0 && gpsLngData.length > 0) {
-                  return (
-                    <section>
-                      <h2 className="text-2xl font-bold text-slate-900 mb-6">Flight Path</h2>
-                      <div className="mb-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
-                        <strong>Filtered View:</strong> Showing {gpsLatData.length} GPS points 
-                        from {Math.round(timeRange.start/60)}m{Math.round(timeRange.start%60).toString().padStart(2,'0')}s 
-                        to {Math.round(timeRange.end/60)}m{Math.round(timeRange.end%60).toString().padStart(2,'0')}s
-                      </div>
-                      <Suspense fallback={<ChartSkeleton />}>
-                        <GpsMap
-                          gpsLatData={gpsLatData}
-                          gpsLngData={gpsLngData}
-                          altitudeData={altitudeData || undefined}
-                        />
-                      </Suspense>
-                    </section>
-                  );
-                }
-                return null;
-              })()}
-            </>
-          )}
-
-          {/* Fallback: Show traditional parameter view if AI analysis fails */}
-          {(() => {
-            console.log("🔥 FALLBACK CHECK:");
-            console.log("🔥 parameterMetadataError:", !!parameterMetadataError);
-            console.log("🔥 filteredTimeSeriesData exists:", !!filteredTimeSeriesData);
-            console.log("🔥 filteredTimeSeriesData keys count:", Object.keys(filteredTimeSeriesData || {}).length);
-            console.log("🔥 Should show fallback:", !!(parameterMetadataError && filteredTimeSeriesData && Object.keys(filteredTimeSeriesData).length > 0));
-            return null;
-          })()}
-          {parameterMetadataError && filteredTimeSeriesData && Object.keys(filteredTimeSeriesData).length > 0 && (
-            <section className="mb-8">
-              <div className="bg-yellow-50 rounded-lg p-6 border border-yellow-200">
-                <h2 className="text-2xl font-bold text-slate-900 mb-2">
-                  📊 Parameter Analysis (Fallback Mode)
-                </h2>
-                <p className="text-slate-600 mb-4">
-                  AI analysis unavailable. Showing {Object.keys(filteredTimeSeriesData).length} parameters in basic view.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {Object.entries(filteredTimeSeriesData).map(([param, data]) => (
-                    <div key={param} className="bg-white rounded-lg p-4 border border-slate-200">
-                      <h3 className="font-medium text-slate-900 mb-2">
-                        {param.replace(/_/g, ' ')}
-                      </h3>
-                      <p className="text-sm text-slate-600 mb-2">
-                        {data.length.toLocaleString()} data points
-                      </p>
-                      <FlightChart
-                        title={param}
-                        data={data}
-                        parameter={param}
-                        color="#3b82f6"
-                        height={200}
-                      />
-                    </div>
-                  ))}
+                <div className="flex space-x-3">
+                  <a
+                    href={`/dashboard/${logFileId}/charts`}
+                    className="inline-flex items-center px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+                  >
+                    <Settings className="w-5 h-5 mr-2" />
+                    Open Advanced Charts
+                  </a>
                 </div>
               </div>
-            </section>
-          )}
+            </div>
+          </section>
 
-          {/* No Data After Filtering Message */}
+          {/* Flight Path Preview (if GPS data exists) */}
           {(() => {
-            console.log("💀 NO DATA CHECK:");
-            console.log("💀 timeSeriesData exists:", !!timeSeriesData);
-            console.log("💀 filteredTimeSeriesData keys count:", Object.keys(filteredTimeSeriesData || {}).length);
-            console.log("💀 Should show no data message:", !!(timeSeriesData && Object.keys(filteredTimeSeriesData).length === 0));
+            const gpsLatData = timeSeriesData?.['gps_lat'];
+            const gpsLngData = timeSeriesData?.['gps_lng'];
+            const altitudeData = timeSeriesData?.['altitude'];
+
+            if (gpsLatData && gpsLngData && gpsLatData.length > 0 && gpsLngData.length > 0) {
+              return (
+                <section className="mb-8">
+                  <h2 className="text-2xl font-bold text-slate-900 mb-6">Flight Path Overview</h2>
+                  <div className="bg-white rounded-lg border border-slate-200 p-6">
+                    <div className="mb-4 p-3 bg-green-50 rounded-lg text-sm text-green-700">
+                      <strong>Flight Path:</strong> {gpsLatData.length} GPS coordinate points recorded during flight
+                    </div>
+                    <Suspense fallback={<ChartSkeleton />}>
+                      <GpsMap
+                        gpsLatData={gpsLatData}
+                        gpsLngData={gpsLngData}
+                        altitudeData={altitudeData || undefined}
+                      />
+                    </Suspense>
+                  </div>
+                </section>
+              );
+            }
             return null;
           })()}
-          {timeSeriesData && Object.keys(filteredTimeSeriesData).length === 0 && (
+
+          {/* No Data Message */}
+          {!timeSeriesData && !timeSeriesError && (
             <div className="text-center py-12">
               <BarChart3 className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-              <h3 className="text-xl font-semibold text-slate-900 mb-2">No Data in Selected Range</h3>
-              <p className="text-slate-600 mb-4">
-                The current parameter and time range selections don't contain any data points.
+              <h3 className="text-xl font-semibold text-slate-900 mb-2">Flight Data Processing</h3>
+              <p className="text-slate-600">
+                Your log file is being processed. Flight analysis will appear here once complete.
               </p>
-              <button
-                onClick={() => {
-                  setSelectedParameters(Object.keys(timeSeriesData));
-                  setTimeRange({ start: 0, end: dashboardData?.flightDuration || 0 });
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Reset Filters
-              </button>
             </div>
           )}
         </>
